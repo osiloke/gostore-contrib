@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/blevesearch/bleve"
 	"github.com/osiloke/gostore"
+	"sync"
 	// "github.com/osiloke/gostore-contrib/indexer"
 )
 
@@ -19,6 +20,7 @@ type IndexedBoltRows struct {
 	closed    chan bool
 	retrieved chan string
 	nextItem  chan interface{}
+	mu        *sync.RWMutex
 }
 
 func (s IndexedBoltRows) Next(dst interface{}) (bool, error) {
@@ -42,12 +44,16 @@ func (s IndexedBoltRows) LastError() error {
 }
 func (s IndexedBoltRows) Close() {
 	// s.rows = nil
+	s.mu.RLock()
 	if s.isClosed {
 		return
 	}
+	s.mu.RUnlock()
 	s.closed <- true
 	logger.Info("close bolt rows")
+	s.mu.Lock()
 	s.isClosed = true
+	s.mu.Unlock()
 }
 func NewIndexedBoltRows(name string, total uint64, result *bleve.SearchResult, bs *BoltStore) IndexedBoltRows {
 	closed := make(chan bool, 1)
@@ -55,7 +61,7 @@ func NewIndexedBoltRows(name string, total uint64, result *bleve.SearchResult, b
 	retrieved := make(chan string)
 	ci := 0
 
-	b := IndexedBoltRows{isClosed: false, nextItem: nextItem, closed: closed, retrieved: retrieved}
+	b := IndexedBoltRows{isClosed: false, nextItem: nextItem, closed: closed, retrieved: retrieved, mu: &sync.RWMutex{}}
 	go func() {
 	OUTER:
 		for {
@@ -66,8 +72,8 @@ func NewIndexedBoltRows(name string, total uint64, result *bleve.SearchResult, b
 				break OUTER
 
 			case item := <-nextItem:
-				logger.Info("current index", "ci", ci, "total", total)
-				if uint64(ci) == total {
+				logger.Info("current index", "ci", ci, "total", result.Hits.Len())
+				if ci == result.Hits.Len() {
 					b.lastError = gostore.ErrEOF
 					logger.Info("break bolt rows loop")
 					retrieved <- ""

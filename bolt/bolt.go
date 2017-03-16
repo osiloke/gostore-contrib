@@ -729,9 +729,24 @@ func (s BoltStore) getQueryString(store string, filter map[string]interface{}) s
 			queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, _v)
 			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, _v)
 		} else if v == "" {
-
 		} else {
-			queryString = fmt.Sprintf("%s +data.%s:%v", queryString, k, v)
+			val_rune := []rune(v.(string))
+			first := string(val_rune[0])
+			if first == "<" {
+				v = string(val_rune[1:])
+				queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, v)
+			} else if first == ">" {
+				v = string(val_rune[1:])
+				queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, v)
+
+			} else {
+				prefix := "+"
+				if first == "!" {
+					prefix = "-"
+					v = string(val_rune[1:])
+				}
+				queryString = fmt.Sprintf(`%s %sdata.%s:"%v"`, queryString, prefix, k, v)
+			}
 		}
 	}
 	return queryString
@@ -743,16 +758,17 @@ func (s BoltStore) FilterGet(filter map[string]interface{}, store string, dst in
 		data [][]byte
 	)
 
-	res, err := s.Indexer.Query(s.getQueryString(store, filter))
+	// res, err := s.Indexer.Query(s.getQueryString(store, filter))
+	res, err := s.Indexer.QueryWithOptions(s.getQueryString(store, filter), 1, 0, false, []string{}, indexer.OrderRequest([]string{"-_id"}))
 	if err != nil {
 		return err
 	}
 	if res.Total == 0 {
 		return gostore.ErrNotFound
 	}
-	if res.Total > 1 {
-		return gostore.ErrDuplicatePk
-	}
+	// if res.Total > 1 {
+	// 	return gostore.ErrDuplicatePk
+	// }
 	if bucket, err := s.getBucketList(store, filter); err == nil {
 		data, err = s._NestedGet([]byte(res.Hits[0].ID), bucket)
 	} else {
@@ -767,8 +783,9 @@ func (s BoltStore) FilterGet(filter map[string]interface{}, store string, dst in
 
 }
 func (s BoltStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
-	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store)
-	res, err := s.Indexer.QueryWithOptions(s.getQueryString(store, filter), count, skip, false, []string{})
+	q := s.getQueryString(store, filter)
+	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
+	res, err := s.Indexer.QueryWithOptions(q, count, skip, false, []string{}, indexer.OrderRequest([]string{"-_id"}))
 	if err != nil {
 		return nil, err
 	}

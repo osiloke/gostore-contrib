@@ -10,6 +10,15 @@ import (
 
 var logger = log.New("gostore-contrib.indexer")
 
+type RequestOpt func(*bleve.SearchRequest) error
+
+var OrderRequest = func(orderBy []string) RequestOpt {
+	return func(req *bleve.SearchRequest) error {
+		req.SortBy(orderBy)
+		return nil
+	}
+}
+
 type Indexer struct {
 	index bleve.Index
 }
@@ -34,24 +43,29 @@ func (i Indexer) UnIndexDocument(id string) error {
 	return i.index.Delete(id)
 }
 
-func (i Indexer) QueryMap(q map[string]interface{}) (*bleve.SearchResult, error) {
+func (i Indexer) QueryMap(q map[string]interface{}, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	queryString := ""
 	for k, v := range q {
 		queryString = fmt.Sprintf("%s %s:%v", queryString, k, v)
 	}
-	return i.Query(queryString)
+	return i.Query(queryString, opts...)
 }
-func (i Indexer) Query(q string) (*bleve.SearchResult, error) {
+func (i Indexer) Query(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
 	println(q)
 	query := bleve.NewQueryStringQuery(q)
 	searchRequest := bleve.NewSearchRequest(query)
+	for _, opt := range opts {
+		if err := opt(searchRequest); err != nil {
+			logger.Warn("failed option passed")
+		}
+	}
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) QueryWithOptions(q string, size, from int, explain bool, fields []string) (*bleve.SearchResult, error) {
+func (i Indexer) QueryWithOptions(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
@@ -60,10 +74,15 @@ func (i Indexer) QueryWithOptions(q string, size, from int, explain bool, fields
 	if len(fields) > 0 {
 		searchRequest.Fields = fields
 	}
+	for _, opt := range opts {
+		if err := opt(searchRequest); err != nil {
+			logger.Warn("failed option passed")
+		}
+	}
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) QueryWithOptionsHighlighted(q string, size, from int, explain bool, fields []string) (*bleve.SearchResult, error) {
+func (i Indexer) QueryWithOptionsHighlighted(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
@@ -71,10 +90,15 @@ func (i Indexer) QueryWithOptionsHighlighted(q string, size, from int, explain b
 	query := bleve.NewQueryStringQuery(q)
 	searchRequest := bleve.NewSearchRequestOptions(query, size, from, explain)
 	searchRequest.Highlight = bleve.NewHighlightWithStyle("ansi")
+	for _, opt := range opts {
+		if err := opt(searchRequest); err != nil {
+			logger.Warn("failed option passed")
+		}
+	}
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) MatchQuery(q, field string) (*bleve.SearchResult, error) {
+func (i Indexer) MatchQuery(q, field string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
@@ -83,26 +107,41 @@ func (i Indexer) MatchQuery(q, field string) (*bleve.SearchResult, error) {
 	query.SetField(field)
 	query.SetFuzziness(0)
 	searchRequest := bleve.NewSearchRequest(query)
+	for _, opt := range opts {
+		if err := opt(searchRequest); err != nil {
+			logger.Warn("failed option passed")
+		}
+	}
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) TermQuery(q string) (*bleve.SearchResult, error) {
+func (i Indexer) TermQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
 	query := bleve.NewTermQuery(q)
 	searchRequest := bleve.NewSearchRequest(query)
+	for _, opt := range opts {
+		if err := opt(searchRequest); err != nil {
+			logger.Warn("failed option passed")
+		}
+	}
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) MatchPhraseQuery(q string) (*bleve.SearchResult, error) {
+func (i Indexer) MatchPhraseQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
 	query := bleve.NewMatchPhraseQuery(q)
 	searchRequest := bleve.NewSearchRequest(query)
+	for _, opt := range opts {
+		if err := opt(searchRequest); err != nil {
+			logger.Warn("failed option passed")
+		}
+	}
 	return i.index.Search(searchRequest)
 }
 
