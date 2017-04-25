@@ -4,15 +4,17 @@ package bolt
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/blevesearch/bleve"
 	"github.com/boltdb/bolt"
 	"github.com/dustin/gojson"
 	"github.com/mgutz/logxi/v1"
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/indexer"
-	"regexp"
-	"sync"
-	"time"
 )
 
 var logger = log.New("gostore-contrib.bolt")
@@ -749,7 +751,7 @@ func (s BoltStore) getQueryString(store string, filter map[string]interface{}) s
 			}
 		}
 	}
-	return queryString
+	return strings.Replace(queryString, "\"", "", -1)
 }
 func (s BoltStore) FilterGet(filter map[string]interface{}, store string, dst interface{}, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterGet", "filter", filter, "Store", store)
@@ -759,7 +761,7 @@ func (s BoltStore) FilterGet(filter map[string]interface{}, store string, dst in
 	)
 
 	// res, err := s.Indexer.Query(s.getQueryString(store, filter))
-	res, err := s.Indexer.QueryWithOptions(s.getQueryString(store, filter), 1, 0, false, []string{}, indexer.OrderRequest([]string{"-_id"}))
+	res, err := s.Indexer.QueryWithOptions(s.getQueryString(store, filter), 1, 0, false, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
 	if err != nil {
 		return err
 	}
@@ -785,8 +787,9 @@ func (s BoltStore) FilterGet(filter map[string]interface{}, store string, dst in
 func (s BoltStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
 	q := s.getQueryString(store, filter)
 	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
-	res, err := s.Indexer.QueryWithOptions(q, count, skip, false, []string{}, indexer.OrderRequest([]string{"-_id"}))
+	res, err := s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
 	if err != nil {
+		logger.Warn("err", "error", err)
 		return nil, err
 	}
 	if res.Total == 0 {
