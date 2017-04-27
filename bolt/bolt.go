@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/blevesearch/bleve"
-	"github.com/boltdb/bolt"
+	boltdb "github.com/boltdb/bolt"
 	"github.com/dustin/gojson"
 	"github.com/mgutz/logxi/v1"
 	"github.com/osiloke/gostore"
@@ -29,7 +29,7 @@ type TableConfig struct {
 
 type BoltStore struct {
 	Bucket      []byte
-	Db          *bolt.DB
+	Db          *boltdb.DB
 	Indexer     *indexer.Indexer
 	tableConfig map[string]*TableConfig
 }
@@ -44,7 +44,7 @@ func (d *IndexedData) Type() string {
 }
 
 func New(path string) (s gostore.ObjectStore, err error) {
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := boltdb.Open(path, 0600, nil)
 	if err != nil {
 		return
 	}
@@ -84,13 +84,13 @@ func (s BoltStore) GetStore() interface{} {
 }
 
 func (s BoltStore) CreateBucket(bucket string) error {
-	return s.Db.Update(func(tx *bolt.Tx) error {
+	return s.Db.Update(func(tx *boltdb.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(bucket))
 		return err
 	})
 }
 
-func getBucket(tx *bolt.Tx, bucket []string) (nbkt *bolt.Bucket, err error) {
+func getBucket(tx *boltdb.Tx, bucket []string) (nbkt *boltdb.Bucket, err error) {
 	bkt := tx.Bucket([]byte(bucket[0]))
 	for _, k := range bucket[1:] {
 		nbkt, err = bkt.CreateBucketIfNotExists([]byte(k))
@@ -100,9 +100,9 @@ func getBucket(tx *bolt.Tx, bucket []string) (nbkt *bolt.Bucket, err error) {
 	}
 	return
 }
-func Get(key []byte, bucket []byte, db *bolt.DB) (v []byte, err error) {
+func Get(key []byte, bucket []byte, db *boltdb.DB) (v []byte, err error) {
 	defer timeTrack(time.Now(), "Bolt Store::Get "+string(key)+" from "+string(bucket))
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *boltdb.Tx) error {
 		b := tx.Bucket(bucket)
 		v = b.Get(key)
 		if v == nil {
@@ -113,9 +113,9 @@ func Get(key []byte, bucket []byte, db *bolt.DB) (v []byte, err error) {
 	return
 }
 
-func NestedGet(key []byte, bucket []string, db *bolt.DB) (v []byte, err error) {
+func NestedGet(key []byte, bucket []string, db *boltdb.DB) (v []byte, err error) {
 	defer timeTrack(time.Now(), "Bolt Store::NestedGet "+string(key)+" from "+string(bucket[0]))
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *boltdb.Tx) error {
 		nbkt, err := getBucket(tx, bucket)
 		if err != nil {
 			return err
@@ -129,9 +129,9 @@ func NestedGet(key []byte, bucket []string, db *bolt.DB) (v []byte, err error) {
 	return
 }
 
-func PrefixGet(prefix []byte, bucket []byte, db *bolt.DB) (k, v []byte, err error) {
+func PrefixGet(prefix []byte, bucket []byte, db *boltdb.DB) (k, v []byte, err error) {
 	defer timeTrack(time.Now(), "Bolt Store::PrefixGet "+string(prefix)+" from "+string(bucket))
-	err = db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *boltdb.Tx) error {
 		c := tx.Bucket(bucket).Cursor()
 		k, v = c.Seek(prefix)
 		if v == nil {
@@ -177,17 +177,24 @@ func (s BoltStore) _PrefixGet(prefix []byte, resource string) (v [][]byte, err e
 }
 
 func (s BoltStore) _Save(key []byte, data []byte, resource string) error {
-	err := s.Db.Update(func(tx *bolt.Tx) error {
+	err := s.Db.Update(func(tx *boltdb.Tx) error {
 		b := tx.Bucket([]byte(resource))
 		err := b.Put(key, data)
 		return err
 	})
 	return err
 }
+func (s BoltStore) _SaveTx(key []byte, data []byte, resource string) func(tx *boltdb.Tx) error {
+	return func(tx *boltdb.Tx) error {
+		b := tx.Bucket([]byte(resource))
+		err := b.Put(key, data)
+		return err
+	}
+}
 
 func (s BoltStore) _Delete(key string, resource string) error {
 	logger.Info("_Delete", "key", key, "bucket", resource)
-	err := s.Db.Update(func(tx *bolt.Tx) error {
+	err := s.Db.Update(func(tx *boltdb.Tx) error {
 		b := tx.Bucket([]byte(resource))
 		err := b.Delete([]byte(key))
 		return err
@@ -196,7 +203,7 @@ func (s BoltStore) _Delete(key string, resource string) error {
 }
 
 func (s BoltStore) DeleteAll(resource string) error {
-	err := s.Db.Update(func(tx *bolt.Tx) error {
+	err := s.Db.Update(func(tx *boltdb.Tx) error {
 		b := tx.Bucket([]byte(resource))
 		c := b.Cursor()
 		for k, _ := c.First(); k != nil; k, _ = c.Next() {
@@ -216,7 +223,7 @@ func (s BoltStore) _NestedGet(key []byte, bucket []string) (v [][]byte, err erro
 	return
 }
 func (s BoltStore) _NestedSave(key []byte, data []byte, bucket []string) error {
-	err := s.Db.Update(func(tx *bolt.Tx) error {
+	err := s.Db.Update(func(tx *boltdb.Tx) error {
 		nbkt, err := getBucket(tx, bucket)
 		if err == nil {
 			err = nbkt.Put(key, data)
@@ -226,7 +233,7 @@ func (s BoltStore) _NestedSave(key []byte, data []byte, bucket []string) error {
 	return err
 }
 func (s BoltStore) _NestedDelete(key string, resource string) error {
-	err := s.Db.Update(func(tx *bolt.Tx) error {
+	err := s.Db.Update(func(tx *boltdb.Tx) error {
 		b := tx.Bucket([]byte(resource))
 		err := b.Delete([]byte(key))
 		return err
@@ -335,7 +342,7 @@ func (s BoltStore) All(count int, skip int, store string) (gostore.ObjectRows, e
 
 func (s BoltStore) GetAll(count int, skip int, bucket []string) (objs [][][]byte, err error) {
 
-	err = s.Db.View(func(tx *bolt.Tx) error {
+	err = s.Db.View(func(tx *boltdb.Tx) error {
 		nbkt, err := getBucket(tx, bucket)
 		if err != nil {
 			return err
@@ -384,7 +391,7 @@ func (s BoltStore) GetAll(count int, skip int, bucket []string) (objs [][][]byte
 
 func (s BoltStore) _GetAllAfter(key []byte, count int, skip int, resource string) (objs [][][]byte, err error) {
 	s.CreateBucket(resource)
-	err = s.Db.View(func(tx *bolt.Tx) error {
+	err = s.Db.View(func(tx *boltdb.Tx) error {
 		c := tx.Bucket([]byte(resource)).Cursor()
 		var lim int = 0
 		if skip > 0 {
@@ -424,7 +431,7 @@ func (s BoltStore) _GetAllAfter(key []byte, count int, skip int, resource string
 
 func (s BoltStore) GetAllBefore(key []byte, count int, skip int, resource string) (objs [][][]byte, err error) {
 	s.CreateBucket(resource)
-	err = s.Db.View(func(tx *bolt.Tx) error {
+	err = s.Db.View(func(tx *boltdb.Tx) error {
 		c := tx.Bucket([]byte(resource)).Cursor()
 		var lim int = 0
 		if skip > 0 {
@@ -464,7 +471,7 @@ func (s BoltStore) GetAllBefore(key []byte, count int, skip int, resource string
 func (s BoltStore) _Filter(prefix []byte, count int, skip int, resource string) (objs [][][]byte, err error) {
 	s.CreateBucket(resource)
 	b_prefix := []byte(prefix)
-	err = s.Db.View(func(tx *bolt.Tx) error {
+	err = s.Db.View(func(tx *boltdb.Tx) error {
 		var lim int = 1
 		c := tx.Bucket([]byte(resource)).Cursor()
 		if skip > 0 {
@@ -504,7 +511,7 @@ func (s BoltStore) _Filter(prefix []byte, count int, skip int, resource string) 
 func (s BoltStore) FilterSuffix(suffix []byte, count int, resource string) (objs [][]byte, err error) {
 	s.CreateBucket(resource)
 	b_prefix := []byte(suffix)
-	err = s.Db.View(func(tx *bolt.Tx) error {
+	err = s.Db.View(func(tx *boltdb.Tx) error {
 		var lim int = 1
 		c := tx.Bucket([]byte(resource)).Cursor()
 		for k, v := c.Seek(b_prefix); bytes.HasPrefix(k, b_prefix); k, v = c.Next() {
@@ -526,7 +533,7 @@ func (s BoltStore) StreamFilter(key []byte, count int, resource string) chan []b
 	ch := make(chan []byte)
 	go func() {
 		b_prefix := []byte(key)
-		s.Db.View(func(tx *bolt.Tx) error {
+		s.Db.View(func(tx *boltdb.Tx) error {
 			var lim int = 1
 			c := tx.Bucket([]byte(resource)).Cursor()
 			for k, v := c.Seek(b_prefix); bytes.HasPrefix(k, b_prefix); k, v = c.Next() {
@@ -549,7 +556,7 @@ func (s BoltStore) StreamAll(count int, resource string) chan [][]byte {
 	//Uses channels to stream filtered keys
 	ch := make(chan [][]byte)
 	go func() {
-		s.Db.View(func(tx *bolt.Tx) error {
+		s.Db.View(func(tx *boltdb.Tx) error {
 			var lim int = 1
 			c := tx.Bucket([]byte(resource)).Cursor()
 			for k, v := c.Last(); k != nil; k, v = c.Prev() {
@@ -568,7 +575,7 @@ func (s BoltStore) StreamAll(count int, resource string) chan [][]byte {
 
 func (s BoltStore) Stats(bucket string) (data map[string]interface{}, err error) {
 	data = make(map[string]interface{})
-	err = s.Db.View(func(tx *bolt.Tx) error {
+	err = s.Db.View(func(tx *boltdb.Tx) error {
 		v := tx.Bucket([]byte(bucket)).Stats()
 		data["total_count"] = v.KeyN
 		return nil
@@ -852,4 +859,32 @@ func (s BoltStore) BatchFilterDelete(filter []map[string]interface{}, store stri
 	return gostore.ErrNotImplemented
 }
 
+func (s BoltStore) BatchInsert(data []interface{}, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
+	keys = make([]string, len(data))
+	for _, src := range data {
+		var key string
+		if _v, ok := src.(map[string]interface{}); ok {
+			if k, ok := _v["id"].(string); ok {
+				key = k
+			} else {
+				key = gostore.NewObjectId().String()
+				_v["id"] = key
+			}
+		} else if _v, ok := src.(HasID); ok {
+			key = _v.GetId()
+		} else {
+			key = gostore.NewObjectId().String()
+		}
+		data, err := json.Marshal(src)
+		if err != nil {
+			break
+		}
+		if err = s.Db.Batch(s._SaveTx([]byte(key), data, store)); err != nil {
+			break
+		}
+		err = s.Indexer.IndexDocument(key, IndexedData{store, src})
+		keys = append(keys, key)
+	}
+	return
+}
 func (s BoltStore) Close() {}
