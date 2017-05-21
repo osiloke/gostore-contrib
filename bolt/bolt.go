@@ -3,6 +3,7 @@ package bolt
 //TODO: Extract methods into functions
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -861,6 +862,8 @@ func (s BoltStore) BatchFilterDelete(filter []map[string]interface{}, store stri
 
 func (s BoltStore) BatchInsert(data []interface{}, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
 	keys = make([]string, len(data))
+	errCnt := 0
+	var wg sync.WaitGroup
 	for _, src := range data {
 		var key string
 		if _v, ok := src.(map[string]interface{}); ok {
@@ -879,11 +882,24 @@ func (s BoltStore) BatchInsert(data []interface{}, store string, opts gostore.Ob
 		if err != nil {
 			break
 		}
-		if err = s.Db.Batch(s._SaveTx([]byte(key), data, store)); err != nil {
-			break
-		}
-		err = s.Indexer.IndexDocument(key, IndexedData{store, src})
-		keys = append(keys, key)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err2 := s.Db.Batch(s._SaveTx([]byte(key), data, store)); err2 != nil {
+				errCnt += 1
+				logger.Warn(err.Error())
+				return
+			}
+			if err2 := s.Indexer.IndexDocument(key, IndexedData{store, src}); err2 != nil {
+				errCnt += 1
+				logger.Warn(err.Error())
+			}
+			keys = append(keys, key)
+		}()
+	}
+	wg.Wait()
+	if errCnt > 0 {
+		return nil, errors.New("failed batch insert")
 	}
 	return
 }
