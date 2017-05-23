@@ -3,6 +3,7 @@ package indexer
 import (
 	"errors"
 	"fmt"
+
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/mapping"
 	"github.com/mgutz/logxi/v1"
@@ -181,6 +182,8 @@ func NewIndexer(indexPath string, indexMapping mapping.IndexMapping) *Indexer {
 			return nil
 		}
 		return &Indexer{index}
+	} else {
+		logger.Warn("unable to create index")
 	}
 	return &Indexer{index}
 }

@@ -42,7 +42,8 @@ func (d *IndexedData) Type() string {
 	return "indexed_data"
 }
 
-func New(path string) (s gostore.ObjectStore, err error) {
+func New(p string) (s gostore.ObjectStore, err error) {
+	path := p + ".db"
 	_, err = os.Stat(path)
 	if err != nil {
 		return
