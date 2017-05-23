@@ -43,7 +43,7 @@ func (d *IndexedData) Type() string {
 }
 
 func New(p string) (s gostore.ObjectStore, err error) {
-	path := p + ".db"
+	path := p + "/db"
 	_, err = os.Stat(path)
 	if err != nil {
 		return
@@ -60,7 +60,7 @@ func New(p string) (s gostore.ObjectStore, err error) {
 		return
 	}
 	indexMapping := bleve.NewIndexMapping()
-	indexPath := path + ".index"
+	indexPath := path + "/index"
 	index := indexer.NewIndexer(indexPath, indexMapping)
 	s = BadgerStore{
 		[]byte("_default"),
