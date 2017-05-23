@@ -3,6 +3,7 @@ package badger
 //TODO: Extract methods into functions
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -42,6 +43,13 @@ func (d *IndexedData) Type() string {
 }
 
 func New(path string) (s gostore.ObjectStore, err error) {
+	_, err = os.Stat(path)
+	if err != nil {
+		return
+	}
+	if os.IsNotExist(err) {
+		os.Mkdir(path, os.ModePerm)
+	}
 	opt := badgerdb.DefaultOptions
 	opt.Dir = path
 	opt.SyncWrites = true
