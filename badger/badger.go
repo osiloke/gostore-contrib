@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/blevesearch/bleve"
-	badgerdb "github.com/dgraph-io/badger/badger"
+	badgerdb "github.com/dgraph-io/badger"
 	"github.com/dustin/gojson"
 	"github.com/mgutz/logxi/v1"
 	"github.com/osiloke/gostore"
