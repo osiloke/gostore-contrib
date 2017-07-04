@@ -14,17 +14,18 @@ import (
 
 func createDB(path string) gostore.ObjectStore {
 	path = "./test/" + path
+	dbPath := path + "/db"
 	mode := int(0777)
-	os.RemoveAll(path)
+	os.RemoveAll(dbPath)
 	os.RemoveAll(path + ".index")
-	os.Mkdir(path, os.FileMode(mode))
+	os.Mkdir(dbPath, os.FileMode(mode))
 	_db, _ := New(path)
 	return _db
 }
 func removeDB(path string, db gostore.ObjectStore) {
 	db.Close()
 	path = "./test/" + path
-	os.RemoveAll(path)
+	os.RemoveAll(path + "/db")
 	os.RemoveAll(path + ".index")
 }
 func TestFilterGet(t *testing.T) {

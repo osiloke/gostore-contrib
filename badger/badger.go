@@ -45,18 +45,19 @@ func (d *IndexedData) Type() string {
 func New(p string) (s gostore.ObjectStore, err error) {
 	path := p + "/db"
 	_, err = os.Stat(path)
-	if err != nil {
-		return
-	}
 	if os.IsNotExist(err) {
 		os.Mkdir(path, os.ModePerm)
 	}
+	if err != nil {
+		return
+	}
 	opt := badgerdb.DefaultOptions
 	opt.Dir = path
+	opt.ValueDir = opt.Dir
 	opt.SyncWrites = true
 	kv, err := badgerdb.NewKV(&opt)
 	if err != nil {
-		println(err.Error())
+		logger.Error("unable to create badgerdb", "err", err.Error(), "opt", opt)
 		return
 	}
 	indexMapping := bleve.NewIndexMapping()
@@ -209,10 +210,10 @@ func (s BadgerRows) Close() {
 func (s BadgerStore) _Get(key, store string) (data [][]byte, err error) {
 	data = make([][]byte, 2)
 	storeKey := []byte(s.keyForTableId(store, key))
-	val, _ := s.Db.Get(storeKey)
-	if val != nil {
+	var val badgerdb.KVItem
+	if err := s.Db.Get(storeKey, &val); err == nil {
 		data[0] = []byte(key)
-		data[1] = val
+		data[1] = val.Value()
 	} else {
 		err = gostore.ErrNotFound
 	}
