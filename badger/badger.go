@@ -212,10 +212,13 @@ func (s BadgerStore) _Get(key, store string) (data [][]byte, err error) {
 	storeKey := []byte(s.keyForTableId(store, key))
 	var val badgerdb.KVItem
 	if err := s.Db.Get(storeKey, &val); err == nil {
+		if val.Value() == nil {
+			return nil, gostore.ErrNotFound
+		}
 		data[0] = []byte(key)
 		data[1] = val.Value()
 	} else {
-		err = gostore.ErrNotFound
+		return nil, err
 	}
 	return
 }
@@ -410,25 +413,26 @@ func (s BadgerStore) getQueryString(store string, filter map[string]interface{})
 		if _v, ok := v.(int); ok {
 			queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, _v)
 			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, _v)
-		} else if v == "" {
-		} else {
-			val_rune := []rune(v.(string))
-			first := string(val_rune[0])
+		} else if vv, ok := v.(string); ok {
+			valRune := []rune(vv)
+			first := string(valRune[0])
 			if first == "<" {
-				v = string(val_rune[1:])
+				v = string(valRune[1:])
 				queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, v)
 			} else if first == ">" {
-				v = string(val_rune[1:])
+				v = string(valRune[1:])
 				queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, v)
 
 			} else {
 				prefix := "+"
 				if first == "!" {
 					prefix = "-"
-					v = string(val_rune[1:])
+					v = string(valRune[1:])
 				}
 				queryString = fmt.Sprintf(`%s %sdata.%s:"%v"`, queryString, prefix, k, v)
 			}
+		} else {
+			logger.Warn(store+" QueryString ["+k+"] was not parsed", "filter", filter, "value", v)
 		}
 	}
 	return strings.Replace(queryString, "\"", "", -1)
