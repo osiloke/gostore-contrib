@@ -27,6 +27,7 @@ import (
 
 var (
 	path, name, action, data, key, store string
+	count                                int
 )
 
 func getStore(name, path string) (gostore.ObjectStore, error) {
@@ -52,7 +53,32 @@ var dbCmd = &cobra.Command{
 		}
 
 		switch action {
+		case "getAll":
+			rows, err := db.All(count, 0, store)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			defer rows.Close()
+		OUTER:
+			for {
+				row, ok := rows.NextRaw()
+				if !ok {
+					break OUTER
+				}
+				fmt.Println(string(row))
+			}
 		case "get":
+			_data := make(map[string]interface{})
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			err = db.Get(key, store, &_data)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
+			fmt.Println(fmt.Sprintf("%s = %v", key, _data))
 		case "create":
 			_data := make(map[string]interface{})
 			err = json.Unmarshal([]byte(data), _data)
@@ -86,9 +112,10 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// dbCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	dbCmd.Flags().StringVarP(&path, "path", "-p", "./db", "path to gostore data folder")
-	dbCmd.Flags().StringVarP(&name, "type", "-t", "BADGER", "type of gostore")
-	dbCmd.Flags().StringVarP(&action, "action", "-a", "get", "action to perform, get, save, update")
-	dbCmd.Flags().StringVarP(&key, "key", "-k", "", "key to operate on")
-	dbCmd.Flags().StringVarP(&store, "store", "-s", "_test", "store")
+	dbCmd.Flags().StringVarP(&path, "path", "p", "./db", "path to gostore data folder")
+	dbCmd.Flags().StringVarP(&name, "type", "t", "BADGER", "type of gostore")
+	dbCmd.Flags().StringVarP(&action, "action", "a", "get", "action to perform, get, save, update")
+	dbCmd.Flags().StringVarP(&key, "key", "k", "", "key to operate on")
+	dbCmd.Flags().StringVarP(&store, "store", "s", "_test", "store")
+	dbCmd.Flags().IntVarP(&count, "count", "c", 100, "count of rows to return")
 }
