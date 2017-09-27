@@ -62,7 +62,7 @@ func (s BadgerRows) Close() {
 	// s.isClosed = true
 }
 
-func newBadgerRows(itr *badgerdb.Iterator) BadgerRows {
+func newBadgerRows(itr *badgerdb.Iterator) *BadgerRows {
 	closed := make(chan bool)
 	retrieved := make(chan string)
 	nextItem := make(chan interface{})
@@ -121,5 +121,5 @@ func newBadgerRows(itr *badgerdb.Iterator) BadgerRows {
 		}
 		b.Close()
 	}()
-	return b
+	return &b
 }

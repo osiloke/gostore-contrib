@@ -165,25 +165,26 @@ func GetIndex(indexPath string) (bleve.Index, bool) {
 func NewIndexerFromIndex(index bleve.Index) *Indexer {
 	return &Indexer{index}
 }
+
+// NewIndexer creates a new indexer
 func NewIndexer(indexPath string, indexMapping mapping.IndexMapping) *Indexer {
 	index, err := bleve.Open(indexPath)
 	if err != nil {
 		logger.Debug("Error opening indexpath", "path", indexPath, "verbose", string(err.Error()))
-	}
-	if err == bleve.ErrorIndexPathDoesNotExist {
-		logger.Debug(fmt.Sprintf("Creating new index at %s ...", indexPath))
-		// indexMapping.DefaultAnalyzer = "keyword"
-		index, err = bleve.New(indexPath, indexMapping)
-		if err != nil {
-			logger.Warn("Index could not be created", "path", indexPath, "err", string(err.Error()))
-			if err != bleve.ErrorIndexPathExists {
-				panic(err)
+		if err == bleve.ErrorIndexMetaMissing || err == bleve.ErrorIndexPathDoesNotExist {
+			logger.Debug(fmt.Sprintf("Creating new index at %s ...", indexPath))
+			// indexMapping.DefaultAnalyzer = "keyword"
+			index, err = bleve.New(indexPath, indexMapping)
+			if err != nil {
+				logger.Warn("Index could not be created", "path", indexPath, "err", string(err.Error()))
+				if err != bleve.ErrorIndexPathExists {
+					panic(err)
+				}
+				return nil
 			}
-			return nil
+			return &Indexer{index}
 		}
-		return &Indexer{index}
-	} else {
-		logger.Warn("unable to create index")
+		panic(err)
 	}
 	return &Indexer{index}
 }

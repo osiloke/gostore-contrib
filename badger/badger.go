@@ -2,6 +2,7 @@ package badger
 
 //TODO: Extract methods into functions
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -118,28 +119,22 @@ func (s BadgerStore) _Get(key, store string) (data [][]byte, err error) {
 	storeKey := []byte(s.keyForTableId(store, key))
 	var item badgerdb.KVItem
 	if err := s.Db.Get(storeKey, &item); err != nil {
-		fmt.Printf("Error while getting key: %q", storeKey)
-		return nil, gostore.ErrNotFound
+		errs := fmt.Sprintf("Error while getting key: %q", storeKey)
+		return nil, errors.New(errs)
 	}
 	var val []byte
 	err = item.Value(func(v []byte) error {
-		if len(v) == 0 {
-			return gostore.ErrNotFound
-		}
 		val = make([]byte, len(v))
 		copy(val, v)
 		return nil
 	})
+	if len(val) == 0 {
+		return nil, gostore.ErrNotFound
+	}
+
+	logger.Debug("retrieved a key from badger table", "key", key, "storeKey", storeKey)
+	data[0] = []byte(key)
 	data[1] = val
-	// if err := s.Db.Get(storeKey, &val); err == nil {
-	// 	if val.Value() == nil {
-	// 		return nil, gostore.ErrNotFound
-	// 	}
-	// 	data[0] = []byte(key)
-	// 	data[1] = val.Value()
-	// } else {
-	// 	return nil, err
-	// }
 	return
 }
 func (s BadgerStore) _Delete(key, store string) error {
@@ -149,8 +144,7 @@ func (s BadgerStore) _Delete(key, store string) error {
 }
 func (s BadgerStore) _Save(key, store string, data []byte) error {
 	storeKey := []byte(s.keyForTableId(store, key))
-	s.Db.Set(storeKey, data, 0x00)
-	return nil
+	return s.Db.Set(storeKey, data, 0x00)
 }
 
 // All gets all entries in a store

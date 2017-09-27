@@ -2,6 +2,7 @@ package badger
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/blevesearch/bleve"
@@ -82,7 +83,7 @@ func NewIndexedBadgerRows(name string, total uint64, result *bleve.SearchResult,
 
 				} else {
 					h := result.Hits[ci]
-					logger.Info("retrieving row", "row", h)
+					logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, name))
 					row, err := bs._Get(h.ID, name)
 					if err != nil {
 						if err == gostore.ErrNotFound {
