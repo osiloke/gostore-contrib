@@ -6,7 +6,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/blevesearch/bleve"
 	badgerdb "github.com/dgraph-io/badger"
@@ -22,10 +21,12 @@ type HasID interface {
 	GetId() string
 }
 
+// TableConfig cofig for table
 type TableConfig struct {
 	NestedBucketFieldMatcher map[string]*regexp.Regexp //defines fields to be used to extract nested buckets for data
 }
 
+// BadgerStore gostore implementation that used badgerdb
 type BadgerStore struct {
 	Bucket      []byte
 	Db          *badgerdb.KV
@@ -33,15 +34,18 @@ type BadgerStore struct {
 	tableConfig map[string]*TableConfig
 }
 
+// IndexedData represents a stored row
 type IndexedData struct {
 	Bucket string      `json:"bucket"`
 	Data   interface{} `json:"data"`
 }
 
+// Type type o data
 func (d *IndexedData) Type() string {
 	return "indexed_data"
 }
 
+// New badger store
 func New(p string) (s gostore.ObjectStore, err error) {
 	path := p + "/db"
 	_, err = os.Stat(path)
@@ -109,117 +113,33 @@ func (s BadgerStore) updateTableStats(table string, change uint) {
 
 }
 
-func newBadgerRows(itr *badgerdb.Iterator) BadgerRows {
-	closed := make(chan bool)
-	retrieved := make(chan string)
-	nextItem := make(chan interface{})
-	ci := 0
-	b := BadgerRows{
-		nextItem:  nextItem,
-		closed:    closed,
-		itr:       itr,
-		retrieved: retrieved}
-
-	go func() {
-
-	OUTER:
-		for {
-			select {
-			case <-closed:
-				logger.Info("newBadgerRows closed")
-				break OUTER
-			case item := <-nextItem:
-				// logger.Info("current index", "ci", ci, "total", total)
-				// if ci == total {
-				// 	b.lastError = gostore.ErrEOF
-				// 	// logger.Info("break badger rows loop")
-				// 	break OUTER
-				// 	return
-				// } else {
-				if itr.Valid() {
-					itr.Next()
-					current := itr.Item()
-					if err := json.Unmarshal(current.Value(), item); err != nil {
-						logger.Warn(err.Error())
-						b.lastError = err
-						retrieved <- ""
-						break OUTER
-					} else {
-						key := strings.Split(string(current.Key()), "|")[1]
-						retrieved <- key
-						ci++
-					}
-				} else {
-					b.lastError = gostore.ErrEOF
-					break OUTER
-				}
-			}
-			// }
-		}
-		b.Close()
-	}()
-	return b
-}
-
-//New Api
-type BadgerRows struct {
-	i         int
-	length    int
-	retrieved chan string
-	closed    chan bool
-	nextItem  chan interface{}
-	itr       *badgerdb.Iterator
-	lastError error
-	isClosed  bool
-	sync.RWMutex
-}
-
-func (s BadgerRows) Next(dst interface{}) (bool, error) {
-	if s.lastError != nil {
-		return false, s.lastError
-	}
-	//NOTE: Consider saving id in badger data
-	var _dst map[string]interface{}
-	s.nextItem <- &_dst
-	key := <-s.retrieved
-	if key == "" {
-		return false, nil
-	}
-	_dst["id"] = key
-	_data, _ := json.Marshal(&_dst)
-	json.Unmarshal(_data, dst)
-	return true, nil
-}
-
-func (s BadgerRows) NextRaw() ([]byte, bool) {
-	return nil, false
-}
-func (s BadgerRows) LastError() error {
-	return s.lastError
-}
-func (s BadgerRows) Close() {
-	// s.rows = nil
-	// s.closed <- true
-	logger.Info("close badger rows")
-	close(s.closed)
-	close(s.retrieved)
-	close(s.nextItem)
-	// s.isClosed = true
-}
-
 func (s BadgerStore) _Get(key, store string) (data [][]byte, err error) {
 	data = make([][]byte, 2)
 	storeKey := []byte(s.keyForTableId(store, key))
-	var val badgerdb.KVItem
-	if err := s.Db.Get(storeKey, &val); err == nil {
-		if val.Value() == nil {
-			return nil, gostore.ErrNotFound
-		}
-		data[0] = []byte(key)
-		data[1] = val.Value()
-	} else {
-		return nil, err
+	var item badgerdb.KVItem
+	if err := s.Db.Get(storeKey, &item); err != nil {
+		fmt.Printf("Error while getting key: %q", storeKey)
+		return nil, gostore.ErrNotFound
 	}
+	var val []byte
+	err = item.Value(func(v []byte) error {
+		if len(v) == 0 {
+			return gostore.ErrNotFound
+		}
+		val = make([]byte, len(v))
+		copy(val, v)
+		return nil
+	})
+	data[1] = val
+	// if err := s.Db.Get(storeKey, &val); err == nil {
+	// 	if val.Value() == nil {
+	// 		return nil, gostore.ErrNotFound
+	// 	}
+	// 	data[0] = []byte(key)
+	// 	data[1] = val.Value()
+	// } else {
+	// 	return nil, err
+	// }
 	return
 }
 func (s BadgerStore) _Delete(key, store string) error {
@@ -229,13 +149,15 @@ func (s BadgerStore) _Delete(key, store string) error {
 }
 func (s BadgerStore) _Save(key, store string, data []byte) error {
 	storeKey := []byte(s.keyForTableId(store, key))
-	s.Db.Set(storeKey, data)
+	s.Db.Set(storeKey, data, 0x00)
 	return nil
 }
+
+// All gets all entries in a store
 func (s BadgerStore) All(count int, skip int, store string) (gostore.ObjectRows, error) {
 	itrOpt := badgerdb.IteratorOptions{
-		PrefetchSize: count * 2,
-		FetchValues:  true,
+		PrefetchSize:   count / 2,
+		PrefetchValues: true,
 	}
 	itr := s.Db.NewIterator(itrOpt)
 
@@ -277,20 +199,24 @@ func (s BadgerStore) AllCursor(store string) (gostore.ObjectRows, error) {
 func (s BadgerStore) AllWithinRange(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
 	return nil, gostore.ErrNotImplemented
 }
+
+// Since get items after a key
 func (s BadgerStore) Since(id string, count int, skip int, store string) (gostore.ObjectRows, error) {
 	itrOpt := badgerdb.IteratorOptions{
-		PrefetchSize: count * 2,
-		FetchValues:  true,
+		PrefetchSize:   count / 2,
+		PrefetchValues: true,
 	}
 	itr := s.Db.NewIterator(itrOpt)
 	itr.Seek([]byte(s.keyForTableId(store, id)))
 	// logger.Info("retrieved rows", "rows", _rows)
 	return newBadgerRows(itr), nil
-} //Get all recent items from a key
+}
+
+//Before Get all recent items from a key
 func (s BadgerStore) Before(id string, count int, skip int, store string) (gostore.ObjectRows, error) {
 	itrOpt := badgerdb.IteratorOptions{
-		PrefetchSize: count * 2,
-		FetchValues:  true,
+		PrefetchSize:   count / 2,
+		PrefetchValues: true,
 	}
 	itr := s.Db.NewIterator(itrOpt)
 	itr.Seek([]byte(s.keyForTableId(store, id)))
