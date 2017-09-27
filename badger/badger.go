@@ -116,7 +116,8 @@ func (s BadgerStore) updateTableStats(table string, change uint) {
 
 func (s BadgerStore) _Get(key, store string) (data [][]byte, err error) {
 	data = make([][]byte, 2)
-	storeKey := []byte(s.keyForTableId(store, key))
+	k := s.keyForTableId(store, key)
+	storeKey := []byte(k)
 	var item badgerdb.KVItem
 	if err := s.Db.Get(storeKey, &item); err != nil {
 		errs := fmt.Sprintf("Error while getting key: %q", storeKey)
@@ -149,15 +150,22 @@ func (s BadgerStore) _Save(key, store string, data []byte) error {
 
 // All gets all entries in a store
 func (s BadgerStore) All(count int, skip int, store string) (gostore.ObjectRows, error) {
-	itrOpt := badgerdb.IteratorOptions{
-		PrefetchSize:   count / 2,
-		PrefetchValues: true,
-	}
+	// itrOpt := badgerdb.IteratorOptions{
+	// 	PrefetchSize:   count / 2,
+	// 	PrefetchValues: true,
+	// }
+	itrOpt := badgerdb.DefaultIteratorOptions
 	itr := s.Db.NewIterator(itrOpt)
-
-	itr.Seek([]byte(s.keyForTable(store)))
+	k := s.keyForTable(store)
+	itr.Rewind()
+	logger.Info("seeking to " + k)
+	// itr.Seek([]byte(k))
+	if !itr.Valid() {
+		return nil, errors.New("unable to seek")
+	}
+	logger.Debug("seeked to " + string(itr.Item().Key()))
 	// logger.Info("retrieved rows", "rows", _rows)
-	return newBadgerRows(itr), nil
+	return &SyncRows{itr: itr, length: count}, nil
 }
 
 func (s BadgerStore) GetAll(count int, skip int, bucket []string) (objs [][][]byte, err error) {
@@ -203,7 +211,7 @@ func (s BadgerStore) Since(id string, count int, skip int, store string) (gostor
 	itr := s.Db.NewIterator(itrOpt)
 	itr.Seek([]byte(s.keyForTableId(store, id)))
 	// logger.Info("retrieved rows", "rows", _rows)
-	return newBadgerRows(itr), nil
+	return newBadgerRows(itr, ""), nil
 }
 
 //Before Get all recent items from a key
@@ -215,7 +223,7 @@ func (s BadgerStore) Before(id string, count int, skip int, store string) (gosto
 	itr := s.Db.NewIterator(itrOpt)
 	itr.Seek([]byte(s.keyForTableId(store, id)))
 	// logger.Info("retrieved rows", "rows", _rows)
-	return newBadgerRows(itr), nil
+	return newBadgerRows(itr, ""), nil
 } //Get all existing items before a key
 
 func (s BadgerStore) FilterSince(id string, filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
@@ -381,6 +389,8 @@ func (s BadgerStore) FilterGet(filter map[string]interface{}, store string, dst 
 	return err
 
 }
+
+// FilterGetAll get all from filter
 func (s BadgerStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
 	q := s.getQueryString(store, filter)
 	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
@@ -392,7 +402,8 @@ func (s BadgerStore) FilterGetAll(filter map[string]interface{}, count int, skip
 	if res.Total == 0 {
 		return nil, gostore.ErrNotFound
 	}
-	return NewIndexedBadgerRows(store, res.Total, res, &s), nil
+	// return NewIndexedBadgerRows(store, res.Total, res, &s), nil
+	return &SyncIndexRows{name: store, length: res.Total, result: res, bs: &s}, nil
 }
 
 func (s BadgerStore) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {

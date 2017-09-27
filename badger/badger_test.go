@@ -118,24 +118,61 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 		"count": 11,
 	})
 	tests := []struct {
-		name    string
-		s       BadgerStore
-		args    args
-		want    gostore.ObjectRows
+		name string
+		s    BadgerStore
+		args args
+		// want    gostore.ObjectRows
 		wantErr bool
 	}{
-	// TODO: Add test cases.
+		{
+			"get item",
+			db,
+			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			false,
+		},
+		{
+			"get item",
+			db,
+			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			false,
+		},
+		{
+			"get item",
+			db,
+			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			false,
+		},
+		{
+			"get item",
+			db,
+			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			false,
+		},
+		{
+			"get item",
+			db,
+			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			true,
+		},
+	}
+	tt := tests[0]
+	got, err := tt.s.FilterGetAll(tt.args.filter, tt.args.count, tt.args.skip, tt.args.store, tt.args.opts)
+	if (err != nil) != tt.wantErr {
+		t.Errorf("BadgerStore.FilterGetAll() error = %v, wantErr %v", err, tt.wantErr)
+		return
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.s.FilterGetAll(tt.args.filter, tt.args.count, tt.args.skip, tt.args.store, tt.args.opts)
-			if (err != nil) != tt.wantErr {
+
+			var dst map[string]interface{}
+			ok, _ := got.Next(&dst)
+			if ok != !tt.wantErr {
 				t.Errorf("BadgerStore.FilterGetAll() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("BadgerStore.FilterGetAll() = %v, want %v", got, tt.want)
-			}
+			// if !reflect.DeepEqual(got, tt.want) {
+			// 	t.Errorf("BadgerStore.FilterGetAll() = %v, want %v", got, tt.want)
+			// }
 		})
 	}
 }

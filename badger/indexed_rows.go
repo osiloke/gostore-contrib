@@ -25,7 +25,7 @@ type IndexedBadgerRows struct {
 	mu        *sync.RWMutex
 }
 
-func (s IndexedBadgerRows) Next(dst interface{}) (bool, error) {
+func (s *IndexedBadgerRows) Next(dst interface{}) (bool, error) {
 	if s.lastError != nil {
 		return false, s.lastError
 	}
@@ -38,13 +38,13 @@ func (s IndexedBadgerRows) Next(dst interface{}) (bool, error) {
 	return true, nil
 }
 
-func (s IndexedBadgerRows) NextRaw() ([]byte, bool) {
+func (s *IndexedBadgerRows) NextRaw() ([]byte, bool) {
 	return nil, false
 }
-func (s IndexedBadgerRows) LastError() error {
+func (s *IndexedBadgerRows) LastError() error {
 	return s.lastError
 }
-func (s IndexedBadgerRows) Close() {
+func (s *IndexedBadgerRows) Close() {
 	// s.rows = nil
 	s.mu.RLock()
 	if s.isClosed {
@@ -57,7 +57,7 @@ func (s IndexedBadgerRows) Close() {
 	s.isClosed = true
 	s.mu.Unlock()
 }
-func NewIndexedBadgerRows(name string, total uint64, result *bleve.SearchResult, bs *BadgerStore) IndexedBadgerRows {
+func NewIndexedBadgerRows(name string, total uint64, result *bleve.SearchResult, bs *BadgerStore) *IndexedBadgerRows {
 	closed := make(chan bool, 1)
 	nextItem := make(chan interface{})
 	retrieved := make(chan string)
@@ -115,5 +115,58 @@ func NewIndexedBadgerRows(name string, total uint64, result *bleve.SearchResult,
 		close(nextItem)
 		// close(closed)
 	}()
-	return b
+	return &b
+}
+
+// SyncIndexRows synchroniously get rows
+type SyncIndexRows struct {
+	length uint64
+	name   string
+	result *bleve.SearchResult
+	bs     *BadgerStore
+	ci     uint64
+}
+
+// Next get next item
+func (s *SyncIndexRows) Next(dst interface{}) (bool, error) {
+	err := gostore.ErrEOF
+	if s.ci != s.length {
+		h := s.result.Hits[s.ci]
+		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
+		row, err := s.bs._Get(h.ID, s.name)
+		if err == nil {
+			err = json.Unmarshal(row[1], dst)
+			if err == nil {
+				s.ci++
+				return true, nil
+			}
+			if err == gostore.ErrNotFound {
+				//not found so remove from indexer
+				s.bs.Indexer.UnIndexDocument(h.ID)
+			} else {
+				logger.Warn(err.Error())
+			}
+		}
+	}
+	return false, err
+}
+
+// NextRaw get next raw item
+func (s *SyncIndexRows) NextRaw() ([]byte, bool) {
+	return nil, false
+}
+
+// LastError get last error
+func (s *SyncIndexRows) LastError() error {
+	return nil
+}
+
+// Count returns count of entries
+func (s *SyncIndexRows) Count() int {
+	return int(s.length)
+}
+
+// Close closes row iterator
+func (s *SyncIndexRows) Close() {
+	logger.Debug("finished processing rows", "result", s.result.String())
 }

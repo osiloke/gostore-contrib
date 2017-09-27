@@ -59,15 +59,23 @@ var dbCmd = &cobra.Command{
 				fmt.Println(err.Error())
 				return
 			}
-			defer rows.Close()
 		OUTER:
 			for {
-				row, ok := rows.NextRaw()
+				var d map[string]interface{}
+				ok, err := rows.Next(&d)
 				if !ok {
+					if err != nil {
+						println(err.Error())
+					}
 					break OUTER
+				}
+				row, err := json.MarshalIndent(&d, "", "    ")
+				if err != nil {
+					continue
 				}
 				fmt.Println(string(row))
 			}
+			rows.Close()
 		case "get":
 			_data := make(map[string]interface{})
 			if err != nil {
