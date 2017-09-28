@@ -133,7 +133,7 @@ func (s BadgerStore) _Get(key, store string) (data [][]byte, err error) {
 		return nil, gostore.ErrNotFound
 	}
 
-	logger.Debug("retrieved a key from badger table", "key", key, "storeKey", storeKey)
+	logger.Debug("retrieved a key from badger table", "key", key, "storeKey", string(storeKey))
 	data[0] = []byte(key)
 	data[1] = val
 	return
