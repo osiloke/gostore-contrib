@@ -31,6 +31,50 @@ func removeDB(path string, db gostore.ObjectStore) {
 	os.RemoveAll(path + "/db")
 	os.RemoveAll(path + ".index")
 }
+func TestBadgerStore_Get(t *testing.T) {
+	db := createDB("BatchInsert")
+	defer removeDB("BatchInsert", db)
+	store := "data"
+	db.CreateTable(store, nil)
+	rows := []interface{}{
+		map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "osiloke emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "emike emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "oduffa emoekpere",
+			"count": 11,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "tony emoekpere",
+			"count": 11,
+		},
+	}
+	db.BatchInsert(rows, store, nil)
+	tests := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{
+			"Can retrieve",
+			func(t *testing.T) {
+				dst := map[string]interface{}{}
+				row := rows[0].(map[string]interface{})
+				db.Get(row["id"].(string), store, &dst)
+				assert.Equal(t, dst, row, "retrieved row is not identical to saved row")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
+
+}
 func TestBadgerStore_FilterGet(t *testing.T) {
 	type args struct {
 		filter map[string]interface{}
