@@ -130,7 +130,7 @@ type SyncIndexRows struct {
 // Next get next item
 func (s *SyncIndexRows) Next(dst interface{}) (bool, error) {
 	err := gostore.ErrEOF
-	if s.ci != s.length {
+	if int(s.ci) != s.result.Hits.Len() {
 		h := s.result.Hits[s.ci]
 		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
 		row, err := s.bs._Get(h.ID, s.name)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/osiloke/gostore"
+	"github.com/stretchr/testify/assert"
 )
 
 func createDB(path string) BadgerStore {
@@ -72,6 +73,12 @@ func TestBadgerStore_FilterGet(t *testing.T) {
 			args{map[string]interface{}{"name": "osiloke"}, "data", &dst, nil},
 			false,
 		},
+		{
+			"not exist",
+			db,
+			args{map[string]interface{}{"name": "unknown"}, "data", &dst, nil},
+			true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,7 +91,6 @@ func TestBadgerStore_FilterGet(t *testing.T) {
 		})
 	}
 }
-
 func TestBadgerStore_FilterGetAll(t *testing.T) {
 	type args struct {
 		filter map[string]interface{}
@@ -133,26 +139,26 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"name": "emike emoekpere"}, 10, 0, "data", nil},
 			false,
 		},
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"name": "tony emoekpere"}, 10, 0, "data", nil},
 			false,
 		},
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"name": "oduffa emoekpere"}, 10, 0, "data", nil},
 			false,
 		},
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
-			true,
+			args{map[string]interface{}{"name": "osiloke emoekpere"}, 10, 0, "data", nil},
+			false,
 		},
 	}
 	tt := tests[0]
@@ -161,7 +167,7 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 		t.Errorf("BadgerStore.FilterGetAll() error = %v, wantErr %v", err, tt.wantErr)
 		return
 	}
-	for _, tt := range tests {
+	for _, tt := range tests[1:] {
 		t.Run(tt.name, func(t *testing.T) {
 
 			var dst map[string]interface{}
@@ -175,4 +181,68 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 			// }
 		})
 	}
+}
+func TestBadgerStore_BatchInsert(t *testing.T) {
+	db := createDB("BatchInsert")
+	defer removeDB("BatchInsert", db)
+	store := "data"
+	db.CreateTable(store, nil)
+	rows := []interface{}{
+		map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "osiloke emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "emike emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "oduffa emoekpere",
+			"count": 11,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "tony emoekpere",
+			"count": 11,
+		},
+	}
+	keys, err := db.BatchInsert(rows, store, nil)
+	tests := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{
+			"No Errors",
+			func(t *testing.T) {
+				assert.Nil(t, err, "errors while batch inserting")
+			},
+		},
+		{
+			"Accurate keys returned",
+			func(t *testing.T) {
+				assert.Equal(t, len(keys), len(rows), "inconsistency with returned keys count")
+			},
+		},
+		{
+			"Query for all keys should match batch insert",
+			func(t *testing.T) {
+				storedRows, err := db.All(10, 0, store)
+				assert.Nil(t, err, "errors while retrieving all entries")
+
+				count := 1
+				for {
+					_, ok := storedRows.NextRaw()
+					if !ok {
+						break
+					}
+					count++
+				}
+				assert.Equal(t, 4, count, "stored rows inconsistency")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
+
 }

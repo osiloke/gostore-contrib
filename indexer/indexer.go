@@ -24,6 +24,12 @@ type Indexer struct {
 	index bleve.Index
 }
 
+func (i *Indexer) BatchIndex() *bleve.Batch {
+	return i.index.NewBatch()
+}
+func (i *Indexer) Batch(b *bleve.Batch) error {
+	return i.index.Batch(b)
+}
 func (i *Indexer) AddDocumentMapping(name string, dm *mapping.DocumentMapping) {
 	// i.index.AddDocumentMapping(name, dm)
 }
