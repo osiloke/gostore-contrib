@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/osiloke/gostore"
 	. "github.com/smartystreets/goconvey/convey"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -257,4 +258,128 @@ func TestFilterGetAllNoResults(t *testing.T) {
 			})
 		})
 	})
+}
+func TestBatchInsert(t *testing.T) {
+	boltPath := tempPath()
+	indexPath := tempPath()
+	DB := getDB(boltPath, indexPath)
+	defer func() {
+		DB.Close()
+		os.Remove(boltPath)
+		os.Remove(indexPath)
+	}()
+	store := "data"
+	DB.CreateTable(store, nil)
+	rows := []interface{}{
+		map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "osiloke emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "emike emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "oduffa emoekpere",
+			"count": 11,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "tony emoekpere",
+			"count": 11,
+		},
+	}
+	keys, err := DB.BatchInsert(rows, store, nil)
+	tests := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{
+			"No Errors",
+			func(t *testing.T) {
+				assert.Nil(t, err, "errors while batch inserting")
+			},
+		},
+		{
+			"Accurate keys returned",
+			func(t *testing.T) {
+				assert.Equal(t, len(keys), len(rows), "inconsistency with returned keys count")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
+
+}
+
+func TestAll(t *testing.T) {
+	boltPath := tempPath()
+	indexPath := tempPath()
+	DB := getDB(boltPath, indexPath)
+	defer func() {
+		DB.Close()
+		os.Remove(boltPath)
+		os.Remove(indexPath)
+	}()
+	store := "data"
+	DB.CreateTable(store, nil)
+	rows := []interface{}{
+		map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "osiloke emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "emike emoekpere",
+			"count": 10,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "oduffa emoekpere",
+			"count": 11,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "tony emoekpere",
+			"count": 11,
+		},
+	}
+	keys, err := DB.BatchInsert(rows, store, nil)
+	tests := []struct {
+		name string
+		fn   func(t *testing.T)
+	}{
+		{
+			"No Errors",
+			func(t *testing.T) {
+				assert.Nil(t, err, "errors while batch inserting")
+			},
+		},
+		{
+			"Accurate keys returned",
+			func(t *testing.T) {
+				assert.Equal(t, len(keys), len(rows), "inconsistency with returned keys count")
+			},
+		},
+		{
+			"Query for all keys should match batch insert",
+			func(t *testing.T) {
+				storedRows, err := DB.All(10, 0, store)
+				assert.Nil(t, err, "errors while retrieving all entries")
+
+				count := 1
+				for {
+					_, ok := storedRows.NextRaw()
+					if !ok {
+						break
+					}
+					count++
+				}
+				assert.Equal(t, len(rows), count, "stored rows inconsistency")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
+
 }

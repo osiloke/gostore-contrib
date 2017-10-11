@@ -149,6 +149,6 @@ func (s *SyncRows) Close() {
 }
 
 func newSyncRows(rows [][][]byte) *SyncRows {
-	total := len(rows)
+	total := len(rows) - 1
 	return &SyncRows{length: total, rows: rows}
 }

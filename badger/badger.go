@@ -499,6 +499,7 @@ func (s BadgerStore) BatchInsert(data []interface{}, store string, opts gostore.
 			b.Index(key, IndexedData{store, src})
 			if err2 := s.Indexer.IndexDocument(key, IndexedData{store, src}); err2 != nil {
 				logger.Warn(err.Error())
+				return err2
 			}
 			keys[i] = key
 		}

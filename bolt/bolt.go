@@ -3,12 +3,10 @@ package bolt
 //TODO: Extract methods into functions
 import (
 	"bytes"
-	"errors"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/blevesearch/bleve"
@@ -296,7 +294,7 @@ func (s *BoltStore) _NestedDelete(key string, resource string) error {
 
 func (s *BoltStore) All(count int, skip int, store string) (gostore.ObjectRows, error) {
 	s.CreateBucket(store)
-	_rows, err := s.GetAll(count, skip, []string{store})
+	_rows, err := s.GetAll(count, skip, store)
 	// logger.Info("retrieved rows", "rows", _rows)
 	if err != nil {
 		return nil, err
@@ -304,10 +302,10 @@ func (s *BoltStore) All(count int, skip int, store string) (gostore.ObjectRows, 
 	return newSyncRows(_rows), nil
 }
 
-func (s *BoltStore) GetAll(count int, skip int, bucket []string) (objs [][][]byte, err error) {
+func (s *BoltStore) GetAll(count int, skip int, bucket string) (objs [][][]byte, err error) {
 
 	err = s.Db.View(func(tx *boltdb.Tx) error {
-		nbkt, err := getBucket(tx, bucket)
+		nbkt := tx.Bucket([]byte(bucket))
 		if err != nil {
 			return err
 		}
@@ -757,47 +755,41 @@ func (s *BoltStore) BatchFilterDelete(filter []map[string]interface{}, store str
 }
 
 func (s *BoltStore) BatchInsert(data []interface{}, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
-	// TODO: should use tx.Begin and manually manage transaction
 	keys = make([]string, len(data))
-	errCnt := 0
-	var wg sync.WaitGroup
-	for _, src := range data {
-		var key string
-		if _v, ok := src.(map[string]interface{}); ok {
-			if k, ok := _v["id"].(string); ok {
-				key = k
+	err = s.Db.Update(func(tx *boltdb.Tx) error {
+		b := s.Indexer.BatchIndex()
+		bkt := tx.Bucket([]byte(store))
+		for i, src := range data {
+			var key string
+			if _v, ok := src.(map[string]interface{}); ok {
+				if k, ok := _v["id"].(string); ok {
+					key = k
+				} else {
+					key = gostore.NewObjectId().String()
+					_v["id"] = key
+				}
+			} else if _v, ok := src.(HasID); ok {
+				key = _v.GetId()
 			} else {
 				key = gostore.NewObjectId().String()
-				_v["id"] = key
 			}
-		} else if _v, ok := src.(HasID); ok {
-			key = _v.GetId()
-		} else {
-			key = gostore.NewObjectId().String()
-		}
-		data, err := json.Marshal(src)
-		if err != nil {
-			break
-		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err2 := s.Db.Update(s._SaveTx([]byte(key), data, store)); err2 != nil {
-				errCnt += 1
-				logger.Warn(err.Error())
-				return
+			data, err := json.Marshal(src)
+			if err != nil {
+				return err
 			}
+			err = bkt.Put([]byte(key), data)
+			if err != nil {
+				return err
+			}
+			b.Index(key, IndexedData{store, src})
 			if err2 := s.Indexer.IndexDocument(key, IndexedData{store, src}); err2 != nil {
-				errCnt += 1
 				logger.Warn(err.Error())
+				return err2
 			}
-			keys = append(keys, key)
-		}()
-	}
-	wg.Wait()
-	if errCnt > 0 {
-		return nil, errors.New("failed batch insert")
-	}
+			keys[i] = key
+		}
+		return s.Indexer.Batch(b)
+	})
 	return
 }
 func (s *BoltStore) Close() {
