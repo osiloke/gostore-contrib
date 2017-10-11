@@ -51,6 +51,7 @@ var dbCmd = &cobra.Command{
 		if err != nil {
 			panic(err.Error())
 		}
+		defer db.Close()
 
 		switch action {
 		case "getAll":

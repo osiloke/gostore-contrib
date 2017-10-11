@@ -228,7 +228,7 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 }
 func TestBadgerStore_BatchInsert(t *testing.T) {
 	db := createDB("BatchInsert")
-	defer removeDB("BatchInsert", db)
+	// defer removeDB("BatchInsert", db)
 	store := "data"
 	db.CreateTable(store, nil)
 	rows := []interface{}{

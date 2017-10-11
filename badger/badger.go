@@ -12,6 +12,7 @@ import (
 	badgerdb "github.com/dgraph-io/badger"
 	"github.com/mgutz/logxi/v1"
 	"github.com/osiloke/gostore"
+	"github.com/osiloke/gostore-contrib/common"
 	"github.com/osiloke/gostore-contrib/indexer"
 )
 
@@ -120,6 +121,7 @@ func (s BadgerStore) _Get(key, store string) ([][]byte, error) {
 	err := s.Db.View(func(txn *badgerdb.Txn) error {
 		item, err2 := txn.Get(storeKey)
 		if err2 != nil {
+			logger.Info("error getting key", "key", k, "err", err2.Error())
 			return err2
 		}
 		v, err2 := item.Value()
@@ -179,6 +181,7 @@ func (s BadgerStore) All(count int, skip int, store string) (gostore.ObjectRows,
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			k := item.Key()
+			logger.Debug("key + " + string(k) + " retrieved")
 			v, err := item.Value()
 			if err != nil {
 				return err
@@ -308,28 +311,7 @@ func (s BadgerStore) SaveRaw(key string, val []byte, store string) error {
 	}
 	return nil
 }
-func (s BadgerStore) Save(store string, src interface{}) (string, error) {
-	var key string
-	// var nestedRe *regexp.Regexp
-	// var nestedKeyVal string
-	if _v, ok := src.(map[string]interface{}); ok {
-		if k, ok := _v["id"].(string); ok {
-			key = k
-		} else {
-			key = gostore.NewObjectId().String()
-			_v["id"] = key
-		}
-	} else if _v, ok := src.(HasID); ok {
-		key = _v.GetId()
-	} else {
-		// if _key, err := shortid.Generate(); err == nil {
-		// 	key = _key
-		// } else {
-		// 	logger.Error(ErrKeyNotValid.Error(), "err", err)
-		// 	return ErrKeyNotValid
-		// }
-		key = gostore.NewObjectId().String()
-	}
+func (s BadgerStore) Save(key, store string, src interface{}) (string, error) {
 	data, err := json.Marshal(src)
 	if err != nil {
 		return "", err
@@ -391,36 +373,6 @@ func (s BadgerStore) FilterUpdate(filter map[string]interface{}, src interface{}
 func (s BadgerStore) FilterReplace(filter map[string]interface{}, src interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	return gostore.ErrNotImplemented
 }
-func (s BadgerStore) getQueryString(store string, filter map[string]interface{}) string {
-	queryString := "+bucket:" + store
-	for k, v := range filter {
-		if _v, ok := v.(int); ok {
-			queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, _v)
-			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, _v)
-		} else if vv, ok := v.(string); ok {
-			valRune := []rune(vv)
-			first := string(valRune[0])
-			if first == "<" {
-				v = string(valRune[1:])
-				queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, v)
-			} else if first == ">" {
-				v = string(valRune[1:])
-				queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, v)
-
-			} else {
-				prefix := "+"
-				if first == "!" {
-					prefix = "-"
-					v = string(valRune[1:])
-				}
-				queryString = fmt.Sprintf(`%s %sdata.%s:"%v"`, queryString, prefix, k, v)
-			}
-		} else {
-			logger.Warn(store+" QueryString ["+k+"] was not parsed", "filter", filter, "value", v)
-		}
-	}
-	return strings.Replace(queryString, "\"", "", -1)
-}
 func (s BadgerStore) FilterGet(filter map[string]interface{}, store string, dst interface{}, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterGet", "filter", filter, "Store", store, "opts", opts)
 	//check if filter contains a nested field which is used to traverse a sub bucket
@@ -428,8 +380,8 @@ func (s BadgerStore) FilterGet(filter map[string]interface{}, store string, dst 
 		data [][]byte
 	)
 
-	// res, err := s.Indexer.Query(s.getQueryString(store, filter))
-	query := s.getQueryString(store, filter)
+	// res, err := s.Indexer.Query(common.GetQueryString(store, filter))
+	query := common.GetQueryString(store, filter)
 	res, err := s.Indexer.QueryWithOptions(query, 1, 0, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
 	if err != nil {
 		logger.Info("FilterGet failed", "query", query)
@@ -452,7 +404,7 @@ func (s BadgerStore) FilterGet(filter map[string]interface{}, store string, dst 
 
 // FilterGetAll get all from filter
 func (s BadgerStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
-	q := s.getQueryString(store, filter)
+	q := common.GetQueryString(store, filter)
 	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
 	res, err := s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
 	if err != nil {
@@ -468,7 +420,7 @@ func (s BadgerStore) FilterGetAll(filter map[string]interface{}, count int, skip
 
 func (s BadgerStore) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterDelete", "filter", filter, "store", store)
-	res, err := s.Indexer.Query(s.getQueryString(store, filter))
+	res, err := s.Indexer.Query(common.GetQueryString(store, filter))
 	if err == nil {
 		if res.Total == 0 {
 			return gostore.ErrNotFound
@@ -492,7 +444,7 @@ func (s BadgerStore) FilterDelete(filter map[string]interface{}, store string, o
 }
 
 func (s BadgerStore) FilterCount(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) (int64, error) {
-	res, err := s.Indexer.Query(s.getQueryString(store, filter))
+	res, err := s.Indexer.Query(common.GetQueryString(store, filter))
 	if err != nil {
 		return 0, err
 	}

@@ -1,14 +1,14 @@
 package bolt
 
 import (
-	"log"
+	"fmt"
 	"strconv"
 	"time"
 )
 
 func timeTrack(start time.Time, name string) {
 	elapsed := time.Since(start)
-	log.Printf("%s took %d", name, elapsed)
+	logger.Debug(fmt.Sprintf("%s took %d", name, elapsed))
 }
 
 func IsInt(v string) bool {

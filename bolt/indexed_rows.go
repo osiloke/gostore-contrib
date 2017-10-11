@@ -2,6 +2,7 @@ package bolt
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/blevesearch/bleve"
 	"github.com/osiloke/gostore"
 	"sync"
@@ -114,4 +115,76 @@ func NewIndexedBoltRows(name string, total uint64, result *bleve.SearchResult, b
 		// close(closed)
 	}()
 	return b
+}
+
+// SyncIndexRows synchroniously get rows
+type SyncIndexRows struct {
+	length    uint64
+	name      string
+	result    *bleve.SearchResult
+	bs        *BoltStore
+	ci        uint64
+	lastError error
+}
+
+// Next get next item
+func (s *SyncIndexRows) Next(dst interface{}) (bool, error) {
+	err := gostore.ErrEOF
+	if int(s.ci) != s.result.Hits.Len() {
+		h := s.result.Hits[s.ci]
+		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
+		row, err := s.bs._Get(h.ID, s.name)
+		if err == nil {
+			err = json.Unmarshal(row[1], dst)
+			if err == nil {
+				s.ci++
+				return true, nil
+			}
+			if err == gostore.ErrNotFound {
+				//not found so remove from indexer
+				s.bs.Indexer.UnIndexDocument(h.ID)
+			} else {
+				logger.Warn(err.Error())
+			}
+			s.lastError = err
+		}
+	}
+	return false, err
+}
+
+// NextRaw get next raw item
+func (s *SyncIndexRows) NextRaw() ([]byte, bool) {
+	err := gostore.ErrEOF
+	if int(s.ci) != s.result.Hits.Len() {
+		h := s.result.Hits[s.ci]
+		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
+		row, err := s.bs._Get(h.ID, s.name)
+		if err == nil {
+			s.ci++
+			return row[1], true
+		}
+		if err == gostore.ErrNotFound {
+			//not found so remove from indexer
+			s.bs.Indexer.UnIndexDocument(h.ID)
+		} else {
+			logger.Warn(err.Error())
+		}
+	}
+	s.lastError = err
+	return nil, false
+}
+
+// LastError get last error
+func (s *SyncIndexRows) LastError() error {
+	return s.lastError
+}
+
+// Count returns count of entries
+func (s *SyncIndexRows) Count() int {
+	return int(s.length)
+}
+
+// Close closes row iterator
+func (s *SyncIndexRows) Close() {
+	logger.Debug("finished processing rows", "result", s.result.String())
 }

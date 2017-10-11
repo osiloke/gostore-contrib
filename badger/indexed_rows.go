@@ -120,11 +120,12 @@ func NewIndexedBadgerRows(name string, total uint64, result *bleve.SearchResult,
 
 // SyncIndexRows synchroniously get rows
 type SyncIndexRows struct {
-	length uint64
-	name   string
-	result *bleve.SearchResult
-	bs     *BadgerStore
-	ci     uint64
+	lastError error
+	length    uint64
+	name      string
+	result    *bleve.SearchResult
+	bs        *BadgerStore
+	ci        uint64
 }
 
 // Next get next item
@@ -148,17 +149,35 @@ func (s *SyncIndexRows) Next(dst interface{}) (bool, error) {
 			}
 		}
 	}
+	s.lastError = err
 	return false, err
 }
 
 // NextRaw get next raw item
 func (s *SyncIndexRows) NextRaw() ([]byte, bool) {
+	err := gostore.ErrEOF
+	if int(s.ci) != s.result.Hits.Len() {
+		h := s.result.Hits[s.ci]
+		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
+		row, err := s.bs._Get(h.ID, s.name)
+		if err == nil {
+			s.ci++
+			return row[1], true
+		}
+		if err == gostore.ErrNotFound {
+			//not found so remove from indexer
+			s.bs.Indexer.UnIndexDocument(h.ID)
+		} else {
+			logger.Warn(err.Error())
+		}
+	}
+	s.lastError = err
 	return nil, false
 }
 
 // LastError get last error
 func (s *SyncIndexRows) LastError() error {
-	return nil
+	return s.lastError
 }
 
 // Count returns count of entries
