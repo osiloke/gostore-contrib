@@ -2,10 +2,8 @@ package badger
 
 //TODO: Extract methods into functions
 import (
-	"fmt"
 	"os"
 	"regexp"
-	"strings"
 
 	"encoding/json"
 	"github.com/blevesearch/bleve"
