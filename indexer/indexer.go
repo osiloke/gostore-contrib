@@ -61,7 +61,7 @@ func (i Indexer) Query(q string, opts ...RequestOpt) (*bleve.SearchResult, error
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
-	println(q)
+	// println(q)
 	query := bleve.NewQueryStringQuery(q)
 	searchRequest := bleve.NewSearchRequest(query)
 	for _, opt := range opts {

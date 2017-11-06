@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/blevesearch/bleve"
@@ -45,7 +47,7 @@ func (d *IndexedData) Type() string {
 	return "indexed_data"
 }
 
-func newWithPaths(boltPath, indexPath string) (store *BoltStore, err error) {
+func NewWithPaths(boltPath, indexPath string) (store *BoltStore, err error) {
 	var db *boltdb.DB
 	db, err = boltdb.Open(boltPath, 0600, nil)
 	if err != nil {
@@ -66,9 +68,9 @@ func new(path string) (store *BoltStore, err error) {
 	if err != nil {
 		return
 	}
-	boltPath := path + "/db"
-	indexPath := path + "/db.index"
-	store, err = newWithPaths(boltPath, indexPath)
+	boltPath := filepath.Join(path, "db")
+	indexPath := filepath.Join(path, "db.index")
+	store, err = NewWithPaths(boltPath, indexPath)
 	return
 }
 
@@ -134,6 +136,9 @@ func (s *BoltStore) GetStore() interface{} {
 	return s.Db
 }
 
+func (s *BoltStore) getBucketPath(bucket string) []string {
+	return strings.Split("bucket", "/")
+}
 func (s *BoltStore) CreateBucket(bucket string) error {
 	return s.Db.Update(func(tx *boltdb.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(bucket))
@@ -598,10 +603,14 @@ func (s *BoltStore) Save(key, store string, src interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := s._Save([]byte(key), data, store); err != nil {
-		return "", err
-	}
-	err = s.Indexer.IndexDocument(key, IndexedData{store, src})
+	err = s.Db.Update(func(tx *boltdb.Tx) error {
+		b := tx.Bucket([]byte(store))
+		err := b.Put([]byte(key), data)
+		if err != nil {
+			return err
+		}
+		return s.Indexer.IndexDocument(key, IndexedData{store, src})
+	})
 	return key, err
 }
 func (s *BoltStore) SaveAll(store string, src ...interface{}) (keys []string, err error) {
@@ -626,10 +635,15 @@ func (s *BoltStore) Update(key string, store string, src interface{}) error {
 	if err != nil {
 		return err
 	}
-	if err := s._Save([]byte(key), data, store); err != nil {
-		return err
-	}
-	err = s.Indexer.IndexDocument(key, IndexedData{store, existing})
+
+	err = s.Db.Update(func(tx *boltdb.Tx) error {
+		b := tx.Bucket([]byte(store))
+		err := b.Put([]byte(key), data)
+		if err != nil {
+			return err
+		}
+		return s.Indexer.IndexDocument(key, IndexedData{store, existing})
+	})
 	return err
 }
 func (s *BoltStore) Replace(key string, store string, src interface{}) error {
@@ -637,14 +651,27 @@ func (s *BoltStore) Replace(key string, store string, src interface{}) error {
 	if err != nil {
 		return err
 	}
-	if err := s._Save([]byte(key), data, store); err != nil {
-		return err
-	}
-	err = s.Indexer.IndexDocument(key, IndexedData{store, src})
+	err = s.Db.Update(func(tx *boltdb.Tx) error {
+		b := tx.Bucket([]byte(store))
+		err := b.Put([]byte(key), data)
+		if err != nil {
+			return err
+		}
+		return s.Indexer.IndexDocument(key, IndexedData{store, src})
+	})
 	return err
 }
 func (s *BoltStore) Delete(key string, store string) error {
-	return s._Delete(key, store)
+	logger.Info("_Delete", "key", key, "bucket", store)
+	err := s.Db.Update(func(tx *boltdb.Tx) error {
+		b := tx.Bucket([]byte(store))
+		err := b.Delete([]byte(key))
+		if err != nil {
+			return err
+		}
+		return s.Indexer.UnIndexDocument(key)
+	})
+	return err
 }
 
 //Filter
@@ -688,7 +715,7 @@ func (s *BoltStore) FilterGet(filter map[string]interface{}, store string, dst i
 func (s *BoltStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
 	q := common.GetQueryString(store, filter)
 	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
-	res, err := s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+	res, err := s.Indexer.QueryWithOptions(q, count, skip, false, []string{"*"}, indexer.OrderRequest([]string{"-_score", "-_id"}))
 	if err != nil {
 		logger.Warn("err", "error", err)
 		return nil, err
@@ -696,6 +723,7 @@ func (s *BoltStore) FilterGetAll(filter map[string]interface{}, count int, skip 
 	if res.Total == 0 {
 		return nil, gostore.ErrNotFound
 	}
+	// logger.Debug("result", "result", res.Hits)
 	// return NewIndexedSyncRows(store, res.Total, res, &s), nil
 	return &SyncIndexRows{name: store, length: res.Total, result: res, bs: s}, nil
 }
@@ -712,14 +740,23 @@ func (s *BoltStore) FilterDelete(filter map[string]interface{}, store string, op
 		// }
 
 		for _, v := range res.Hits {
-			err = s._Delete(v.ID, store)
-			if err != nil {
-				break
-			}
-			err = s.Indexer.UnIndexDocument(v.ID)
-			if err != nil {
-				break
-			}
+			// err = s._Delete(v.ID, store)
+			// if err != nil {
+			// 	break
+			// }
+			// err = s.Indexer.UnIndexDocument(v.ID)
+			// if err != nil {
+			// 	break
+			// }
+			logger.Info("_Delete", "key", v.ID, "bucket", store)
+			err = s.Db.Update(func(tx *boltdb.Tx) error {
+				b := tx.Bucket([]byte(store))
+				err := b.Delete([]byte(v.ID))
+				if err != nil {
+					return err
+				}
+				return s.Indexer.UnIndexDocument(v.ID)
+			})
 		}
 	}
 	return err

@@ -117,6 +117,13 @@ func NewIndexedBoltRows(name string, total uint64, result *bleve.SearchResult, b
 	return b
 }
 
+// func getDatFromFields(fields map[string]interface{}) string {
+// 	jsonObj := gabs.New()
+// 	for k, v := range fields {
+// 		jsonObj.SetP(v, k)
+// 	}
+// 	return jsonObj.S("data").String()
+// }
 // SyncIndexRows synchroniously get rows
 type SyncIndexRows struct {
 	length    uint64
@@ -132,7 +139,6 @@ func (s *SyncIndexRows) Next(dst interface{}) (bool, error) {
 	err := gostore.ErrEOF
 	if int(s.ci) != s.result.Hits.Len() {
 		h := s.result.Hits[s.ci]
-		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
 		row, err := s.bs._Get(h.ID, s.name)
 		if err == nil {
 			err = json.Unmarshal(row[1], dst)
@@ -140,6 +146,7 @@ func (s *SyncIndexRows) Next(dst interface{}) (bool, error) {
 				s.ci++
 				return true, nil
 			}
+			// this should be done in a background goroutine worker for pruning stale entries
 			if err == gostore.ErrNotFound {
 				//not found so remove from indexer
 				s.bs.Indexer.UnIndexDocument(h.ID)
@@ -186,5 +193,5 @@ func (s *SyncIndexRows) Count() int {
 
 // Close closes row iterator
 func (s *SyncIndexRows) Close() {
-	logger.Debug("finished processing rows", "result", s.result.String())
+	// logger.Debug("finished processing rows", "result", s.result.String())
 }

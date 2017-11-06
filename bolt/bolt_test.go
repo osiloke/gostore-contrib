@@ -1,8 +1,9 @@
-package bolt
+package bolt_test
 
 import (
 	"fmt"
 	"github.com/osiloke/gostore"
+	. "github.com/osiloke/gostore-contrib/bolt"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
@@ -23,7 +24,7 @@ func tempPath() string {
 }
 
 func getDB(boltPath, indexPath string) *BoltStore {
-	DB, err := newWithPaths(boltPath, indexPath)
+	DB, err := NewWithPaths(boltPath, indexPath)
 	if err != nil {
 		panic(err)
 	}
@@ -58,6 +59,45 @@ func TestSave(t *testing.T) {
 				} else {
 					So(newKey, ShouldEqual, key)
 				}
+			})
+		})
+	})
+}
+func TestDelete(t *testing.T) {
+	boltPath := tempPath()
+	indexPath := tempPath()
+	DB := getDB(boltPath, indexPath)
+	defer func() {
+		DB.Close()
+		os.Remove(boltPath)
+		os.Remove(indexPath)
+	}()
+	DB.CreateTable("data", nil)
+	// Only pass t into top-level Convey calls
+	Convey("Given a map to be saved", t, func() {
+
+		Convey("Then saving the map", func() {
+			key := gostore.NewObjectId().String()
+			data := map[string]interface{}{
+				"id":    key,
+				"name":  "osiloke emoekpere",
+				"count": 10,
+			}
+			newKey, _ := DB.Save(key, "data", &data)
+
+			Convey("Deleting should give no error", func() {
+				err := DB.Delete(key, "data")
+				if err != nil {
+					So(err, ShouldEqual, nil)
+				} else {
+					So(newKey, ShouldEqual, key)
+				}
+				Convey("Getting a list of keys should give error", func() {
+					var d interface{}
+					err := DB.Get(key, "data", &d)
+					So(err, ShouldNotEqual, nil)
+					So(err, ShouldEqual, gostore.ErrNotFound)
+				})
 			})
 		})
 	})
