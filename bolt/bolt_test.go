@@ -406,7 +406,7 @@ func TestAll(t *testing.T) {
 				storedRows, err := DB.All(10, 0, store)
 				assert.Nil(t, err, "errors while retrieving all entries")
 
-				count := 1
+				count := 0
 				for {
 					_, ok := storedRows.NextRaw()
 					if !ok {

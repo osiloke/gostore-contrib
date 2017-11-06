@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func createDB(path string) BadgerStore {
+func createDB(path string) *BadgerStore {
 	mode := int(0777)
 	path = "./ddd/" + path
 	os.Mkdir(path, os.FileMode(mode))
@@ -21,9 +21,9 @@ func createDB(path string) BadgerStore {
 	if err != nil {
 		panic(err)
 	}
-	return _db.(BadgerStore)
+	return _db
 }
-func removeDB(path string, db gostore.ObjectStore) {
+func removeDB(path string, db *BadgerStore) {
 	if db != nil {
 		db.Close()
 	}
@@ -40,19 +40,19 @@ func TestBadgerStore_Get(t *testing.T) {
 		map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "osiloke emoekpere",
-			"count": 10,
+			"count": 10.0,
 		}, map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "emike emoekpere",
-			"count": 10,
+			"count": 10.0,
 		}, map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "oduffa emoekpere",
-			"count": 11,
+			"count": 11.0,
 		}, map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "tony emoekpere",
-			"count": 11,
+			"count": 11.0,
 		},
 	}
 	db.BatchInsert(rows, store, nil)
@@ -66,7 +66,7 @@ func TestBadgerStore_Get(t *testing.T) {
 				dst := map[string]interface{}{}
 				row := rows[0].(map[string]interface{})
 				db.Get(row["id"].(string), store, &dst)
-				assert.Equal(t, dst, row, "retrieved row is not identical to saved row")
+				assert.Equal(t, row, dst, "retrieved row is not identical to saved row")
 			},
 		},
 	}
@@ -91,22 +91,22 @@ func TestBadgerStore_FilterGet(t *testing.T) {
 	osi := map[string]interface{}{
 		"id":    key,
 		"name":  "osiloke emoekpere",
-		"count": 10,
+		"count": 10.0,
 	}
-	db.Save("data", &osi)
+	db.Save(key, "data", &osi)
 
 	key2 := gostore.NewObjectId().String()
 	tony := map[string]interface{}{
 		"id":    key2,
 		"name":  "tony emoekpere",
-		"count": 11,
+		"count": 11.0,
 	}
-	db.Save("data", &tony)
+	db.Save(key2, "data", &tony)
 
 	var dst map[string]interface{}
 	tests := []struct {
 		name    string
-		s       BadgerStore
+		s       *BadgerStore
 		args    args
 		wantErr bool
 	}{
@@ -147,29 +147,33 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 	db := createDB("filterGetAll")
 	defer removeDB("filterGetAll", db)
 	db.CreateTable("data", nil)
-	db.Save("data", &map[string]interface{}{
-		"id":    gostore.NewObjectId().String(),
+	key := gostore.NewObjectId().String()
+	db.Save(key, "data", &map[string]interface{}{
+		"id":    key,
 		"name":  "osiloke emoekpere",
-		"count": 10,
+		"count": 10.0,
 	})
-	db.Save("data", &map[string]interface{}{
-		"id":    gostore.NewObjectId().String(),
+	key2 := gostore.NewObjectId().String()
+	db.Save(key2, "data", &map[string]interface{}{
+		"id":    key2,
 		"name":  "emike emoekpere",
-		"count": 10,
+		"count": 10.0,
 	})
-	db.Save("data", &map[string]interface{}{
-		"id":    gostore.NewObjectId().String(),
+	key3 := gostore.NewObjectId().String()
+	db.Save(key3, "data", &map[string]interface{}{
+		"id":    key3,
 		"name":  "oduffa emoekpere",
-		"count": 11,
+		"count": 11.0,
 	})
-	db.Save("data", &map[string]interface{}{
-		"id":    gostore.NewObjectId().String(),
+	key4 := gostore.NewObjectId().String()
+	db.Save(key4, "data", &map[string]interface{}{
+		"id":    key4,
 		"name":  "tony emoekpere",
-		"count": 11,
+		"count": 11.0,
 	})
 	tests := []struct {
 		name string
-		s    BadgerStore
+		s    *BadgerStore
 		args args
 		// want    gostore.ObjectRows
 		wantErr bool
@@ -235,19 +239,19 @@ func TestBadgerStore_BatchInsert(t *testing.T) {
 		map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "osiloke emoekpere",
-			"count": 10,
+			"count": 10.0,
 		}, map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "emike emoekpere",
-			"count": 10,
+			"count": 10.0,
 		}, map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "oduffa emoekpere",
-			"count": 11,
+			"count": 11.0,
 		}, map[string]interface{}{
 			"id":    gostore.NewObjectId().String(),
 			"name":  "tony emoekpere",
-			"count": 11,
+			"count": 11.0,
 		},
 	}
 	keys, err := db.BatchInsert(rows, store, nil)
@@ -273,15 +277,15 @@ func TestBadgerStore_BatchInsert(t *testing.T) {
 				storedRows, err := db.All(10, 0, store)
 				assert.Nil(t, err, "errors while retrieving all entries")
 
-				count := 1
+				ix := 0
 				for {
 					_, ok := storedRows.NextRaw()
 					if !ok {
 						break
 					}
-					count++
+					ix++
 				}
-				assert.Equal(t, 4, count, "stored rows inconsistency")
+				assert.Equal(t, 4, ix, "stored rows inconsistency")
 			},
 		},
 	}

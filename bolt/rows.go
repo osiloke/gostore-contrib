@@ -106,9 +106,9 @@ type SyncRows struct {
 // Next get next item
 func (s *SyncRows) Next(dst interface{}) (bool, error) {
 	err := gostore.ErrEOF
-	if s.ci != s.length {
+	if s.ci < s.length {
 		row := s.rows[s.ci]
-		logger.Debug("SyncRows next row", "row", row)
+		logger.Debug("SyncRows next row", "row", string(row[0]))
 		err = json.Unmarshal(row[1], dst)
 		if err == nil {
 			s.ci++
@@ -123,9 +123,9 @@ func (s *SyncRows) Next(dst interface{}) (bool, error) {
 // NextRaw get next raw item
 func (s *SyncRows) NextRaw() ([]byte, bool) {
 	err := gostore.ErrEOF
-	if int(s.ci) != s.length {
+	if int(s.ci) < s.length {
 		row := s.rows[s.ci]
-		logger.Debug("SyncRows next row", "row", row)
+		logger.Debug("SyncRows next row", "row", string(row[0]))
 		s.ci++
 		return row[1], true
 	}
@@ -149,6 +149,6 @@ func (s *SyncRows) Close() {
 }
 
 func newSyncRows(rows [][][]byte) *SyncRows {
-	total := len(rows) - 1
+	total := len(rows)
 	return &SyncRows{length: total, rows: rows}
 }

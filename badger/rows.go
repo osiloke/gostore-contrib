@@ -197,7 +197,7 @@ type TransactionRows struct {
 // Next get next item
 func (s *TransactionRows) Next(dst interface{}) (bool, error) {
 	err := gostore.ErrEOF
-	if s.ci != s.length {
+	if s.ci < s.length {
 		if err == nil {
 			val := s.entries[s.ci][1]
 			err = json.Unmarshal(val, dst)
@@ -213,7 +213,7 @@ func (s *TransactionRows) Next(dst interface{}) (bool, error) {
 
 // NextRaw get next raw item
 func (s *TransactionRows) NextRaw() ([]byte, bool) {
-	if s.ci != s.length {
+	if s.ci < s.length {
 		val := s.entries[s.ci][1]
 		s.ci++
 		return val, true

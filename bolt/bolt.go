@@ -46,7 +46,15 @@ type IndexedData struct {
 func (d *IndexedData) Type() string {
 	return "indexed_data"
 }
-
+func NewDBOnly(dbPath string) (store *BoltStore, err error) {
+	var db *boltdb.DB
+	db, err = boltdb.Open(dbPath, 0600, nil)
+	if err != nil {
+		return
+	}
+	store = &BoltStore{[]byte("_default"), db, nil, make(map[string]*TableConfig)}
+	return
+}
 func NewWithPaths(boltPath, indexPath string) (store *BoltStore, err error) {
 	var db *boltdb.DB
 	db, err = boltdb.Open(boltPath, 0600, nil)
@@ -303,6 +311,9 @@ func (s *BoltStore) All(count int, skip int, store string) (gostore.ObjectRows, 
 	// logger.Info("retrieved rows", "rows", _rows)
 	if err != nil {
 		return nil, err
+	}
+	if len(_rows) == 0 {
+		return nil, gostore.ErrNotFound
 	}
 	return newSyncRows(_rows), nil
 }
@@ -819,10 +830,10 @@ func (s *BoltStore) BatchInsert(data []interface{}, store string, opts gostore.O
 				return err
 			}
 			b.Index(key, IndexedData{store, src})
-			if err2 := s.Indexer.IndexDocument(key, IndexedData{store, src}); err2 != nil {
-				logger.Warn(err.Error())
-				return err2
-			}
+			// if err2 := s.Indexer.IndexDocument(key, IndexedData{store, src}); err2 != nil {
+			// 	logger.Warn(err.Error())
+			// 	return err2
+			// }
 			keys[i] = key
 		}
 		return s.Indexer.Batch(b)
