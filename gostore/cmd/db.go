@@ -95,8 +95,8 @@ var dbCmd = &cobra.Command{
 				fmt.Println(err.Error())
 				return
 			}
-			var _k string
-			_k, err = db.Save(store, &data)
+			_k := gostore.NewObjectId().String()
+			_k, err = db.Save(_k, store, &data)
 			if err != nil {
 				fmt.Println(err.Error())
 			}
