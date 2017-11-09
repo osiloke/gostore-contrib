@@ -318,6 +318,48 @@ func (s *BoltStore) All(count int, skip int, store string) (gostore.ObjectRows, 
 	return newSyncRows(_rows), nil
 }
 
+// AllCursor returns all entries in a store.
+func (s *BoltStore) AllCursor(store string) (gostore.ObjectRows, error) {
+	rows := common.NewCursorRows()
+	go func(rows *common.CursorRows) {
+		defer func() {
+			rows.Done() <- true
+		}()
+		err := s.Db.View(func(tx *boltdb.Tx) error {
+			nbkt := tx.Bucket([]byte(store))
+			if nbkt == nil {
+				return ErrNoNestedBuckets
+			}
+			c := nbkt.Cursor()
+			//no skip needed. Get first item
+			k, v := c.First()
+			if k == nil {
+				return gostore.ErrEOF
+			}
+			// listen to chan for next request
+		OUTER:
+			for {
+				select {
+				case <-rows.Exit():
+					break OUTER
+				case <-rows.NextChan():
+					if k == nil {
+						rows.OnNext(nil)
+					} else {
+						rows.OnNext([][]byte{k, v})
+					}
+					k, v = c.Next()
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			logger.Error("cursor rows for "+store+" failed", "err", err.Error())
+		}
+	}(rows)
+	return rows, nil
+}
+
 func (s *BoltStore) GetAll(count int, skip int, bucket string) (objs [][][]byte, err error) {
 
 	err = s.Db.View(func(tx *boltdb.Tx) error {
@@ -559,10 +601,6 @@ func (s *BoltStore) Stats(bucket string) (data map[string]interface{}, err error
 		return nil
 	})
 	return
-}
-
-func (s *BoltStore) AllCursor(store string) (gostore.ObjectRows, error) {
-	return nil, gostore.ErrNotImplemented
 }
 
 func (s *BoltStore) AllWithinRange(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
@@ -840,6 +878,12 @@ func (s *BoltStore) BatchInsert(data []interface{}, store string, opts gostore.O
 	})
 	return
 }
+func (s *BoltStore) BatchInsertKV(rows [][][]byte, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
+	return nil, gostore.ErrNotImplemented
+}
+func (s *BoltStore) BatchInsertKVAndIndex(rows [][][]byte, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
+	return nil, gostore.ErrNotImplemented
+}
 func (s *BoltStore) Close() {
 	if s.Db != nil {
 		s.Db.Close()
@@ -847,4 +891,5 @@ func (s *BoltStore) Close() {
 	if s.Indexer != nil {
 		s.Indexer.Close()
 	}
+	logger.Debug("closing bolt")
 }

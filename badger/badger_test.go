@@ -1,35 +1,42 @@
 package badger
 
 import (
+	"github.com/osiloke/gostore"
+	"github.com/osiloke/gostore-contrib/indexer"
+	"github.com/stretchr/testify/assert"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
-
-	"github.com/osiloke/gostore"
-	"github.com/stretchr/testify/assert"
 )
 
-func createDB(path string) *BadgerStore {
+var rootPath = "./.testdata"
+
+func init() {
+	os.Mkdir(rootPath, 0777)
+}
+
+func createDB(name string) *BadgerStore {
 	mode := int(0777)
-	path = "./ddd/" + path
-	os.Mkdir(path, os.FileMode(mode))
-	dbPath := path + "/db"
+	testDbPath := filepath.Join(rootPath, name)
+	indexPath := filepath.Join(testDbPath, "/db.index")
+	dbPath := filepath.Join(testDbPath, "/db")
+	os.Mkdir(testDbPath, os.FileMode(mode))
 	os.RemoveAll(dbPath)
-	os.RemoveAll(path + ".index")
-	os.Mkdir(dbPath, os.FileMode(mode))
-	_db, err := New(path)
+	os.RemoveAll(indexPath)
+	// os.Mkdir(dbPath, os.FileMode(mode))
+	ix := indexer.NewMossIndexer(indexPath)
+	_db, err := NewWithIndexer(testDbPath, ix)
 	if err != nil {
 		panic(err)
 	}
 	return _db
 }
-func removeDB(path string, db *BadgerStore) {
+func removeDB(name string, db *BadgerStore) {
 	if db != nil {
 		db.Close()
 	}
-	path = "./test/" + path
-	os.RemoveAll(path + "/db")
-	os.RemoveAll(path + ".index")
+	os.RemoveAll(filepath.Join(rootPath, name))
 }
 func TestBadgerStore_Get(t *testing.T) {
 	db := createDB("BatchInsert")
@@ -232,7 +239,7 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 }
 func TestBadgerStore_BatchInsert(t *testing.T) {
 	db := createDB("BatchInsert")
-	// defer removeDB("BatchInsert", db)
+	defer removeDB("BatchInsert", db)
 	store := "data"
 	db.CreateTable(store, nil)
 	rows := []interface{}{

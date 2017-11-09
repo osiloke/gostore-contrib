@@ -4,10 +4,36 @@ import (
 	"errors"
 	"fmt"
 
+	"encoding/json"
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/mapping"
 	"github.com/mgutz/logxi/v1"
+	"strings"
 )
+
+func ReIndex(provider ProviderStore, index *Indexer) error {
+	iter, _ := provider.Cursor()
+	for iter.Valid() {
+		key := iter.Key()
+		val := iter.Value()
+		var v map[string]interface{}
+		if err := json.Unmarshal(val, &v); err == nil {
+			k := string(key)
+			u := strings.SplitN(k, "|", 2)
+			ID := u[1]
+			store := strings.TrimPrefix(u[0], "t$")
+			index.IndexDocument(ID, IndexedData{store, v})
+		}
+		iter.Next()
+	}
+	return nil
+}
+
+// IndexedData represents a stored row
+type IndexedData struct {
+	Bucket string      `json:"bucket"`
+	Data   interface{} `json:"data"`
+}
 
 var logger = log.New("gostore-contrib.indexer")
 
@@ -24,6 +50,9 @@ type Indexer struct {
 	index bleve.Index
 }
 
+func (i *Indexer) Index() bleve.Index {
+	return i.index
+}
 func (i *Indexer) BatchIndex() *bleve.Batch {
 	return i.index.NewBatch()
 }
@@ -38,7 +67,7 @@ func (i Indexer) IndexDocument(id string, data interface{}) error {
 	if i.index == nil {
 		return errors.New("No index")
 	}
-	logger.Debug("Indexing document", "id", id, "data", data)
+	// logger.Debug("Indexing document", "id", id, "data", data)
 	return i.index.Index(id, data)
 }
 
@@ -46,7 +75,7 @@ func (i Indexer) UnIndexDocument(id string) error {
 	if i.index == nil {
 		return errors.New("No index")
 	}
-	logger.Debug("UnIndexing document", "id", id)
+	// logger.Debug("UnIndexing document", "id", id)
 	return i.index.Delete(id)
 }
 
@@ -157,7 +186,10 @@ func (i Indexer) Close() {
 	if i.index == nil {
 		return
 	}
-	i.index.Close()
+	err := i.index.Close()
+	if err != nil {
+		logger.Warn("error while closing index")
+	}
 }
 
 func GetIndex(indexPath string) (bleve.Index, bool) {
@@ -169,7 +201,13 @@ func GetIndex(indexPath string) (bleve.Index, bool) {
 	return index, true
 }
 func NewIndexerFromIndex(index bleve.Index) *Indexer {
-	return &Indexer{index}
+	return &Indexer{index: index}
+}
+
+// NewIndexer creates a new indexer
+func NewDefaultIndexer(indexPath string) *Indexer {
+	indexMapping := bleve.NewIndexMapping()
+	return NewIndexer(indexPath, indexMapping)
 }
 
 // NewIndexer creates a new indexer
@@ -188,9 +226,9 @@ func NewIndexer(indexPath string, indexMapping mapping.IndexMapping) *Indexer {
 				}
 				return nil
 			}
-			return &Indexer{index}
+			return &Indexer{index: index}
 		}
 		panic(err)
 	}
-	return &Indexer{index}
+	return &Indexer{index: index}
 }
