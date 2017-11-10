@@ -1,12 +1,10 @@
-package common
+package indexer
 
 import (
 	"fmt"
-	"github.com/mgutz/logxi/v1"
+	"github.com/blevesearch/bleve"
 	"strings"
 )
-
-var logger = log.New("gostore-contrib.common")
 
 func formatted(prefix, field string, valRune []rune) (queryString string) {
 	v := strings.TrimSpace(string(valRune[1:]))
@@ -22,6 +20,7 @@ func formatted(prefix, field string, valRune []rune) (queryString string) {
 	}
 	return strings.TrimSpace(queryString)
 }
+
 func GetQueryString(store string, filter map[string]interface{}) string {
 	queryString := "+bucket:" + store
 	for k, v := range filter {
@@ -62,4 +61,13 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 		}
 	}
 	return queryString //strings.Replace(queryString, "\"", "", -1)
+}
+
+// Add facets to a request
+func AddFacets(searchRequest *bleve.SearchRequest, facets *Facets) error {
+	for _, facet := range facets.Top {
+		fieldFacet := bleve.NewFacetRequest(facet.Field, facet.Count)
+		searchRequest.AddFacet(facet.Name, fieldFacet)
+	}
+	return nil
 }

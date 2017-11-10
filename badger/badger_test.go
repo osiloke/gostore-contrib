@@ -2,7 +2,8 @@ package badger
 
 import (
 	"github.com/osiloke/gostore"
-	"github.com/osiloke/gostore-contrib/indexer"
+	// "github.com/osiloke/gostore-contrib/indexer"
+	"github.com/blevesearch/bleve/search"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
@@ -25,8 +26,8 @@ func createDB(name string) *BadgerStore {
 	os.RemoveAll(dbPath)
 	os.RemoveAll(indexPath)
 	// os.Mkdir(dbPath, os.FileMode(mode))
-	ix := indexer.NewMossIndexer(indexPath)
-	_db, err := NewWithIndexer(testDbPath, ix)
+	// ix, _ := indexer.NewMossIndexer(indexPath)
+	_db, err := NewWithIndex(testDbPath, "")
 	if err != nil {
 		panic(err)
 	}
@@ -121,13 +122,13 @@ func TestBadgerStore_FilterGet(t *testing.T) {
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "osiloke"}, "data", &dst, nil},
+			args{map[string]interface{}{"q": map[string]interface{}{"name": "osiloke"}}, "data", &dst, nil},
 			false,
 		},
 		{
 			"not exist",
 			db,
-			args{map[string]interface{}{"name": "unknown"}, "data", &dst, nil},
+			args{map[string]interface{}{"q": map[string]interface{}{"name": "unknown"}}, "data", &dst, nil},
 			true,
 		},
 	}
@@ -188,31 +189,31 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "*emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"q": map[string]interface{}{"name": "*emoekpere"}}, 10, 0, "data", nil},
 			false,
 		},
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "emike emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"q": map[string]interface{}{"name": "emike emoekpere"}}, 10, 0, "data", nil},
 			false,
 		},
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "tony emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"q": map[string]interface{}{"name": "tony emoekpere"}}, 10, 0, "data", nil},
 			false,
 		},
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "oduffa emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"q": map[string]interface{}{"name": "oduffa emoekpere"}}, 10, 0, "data", nil},
 			false,
 		},
 		{
 			"get item",
 			db,
-			args{map[string]interface{}{"name": "osiloke emoekpere"}, 10, 0, "data", nil},
+			args{map[string]interface{}{"q": map[string]interface{}{"name": "osiloke emoekpere"}}, 10, 0, "data", nil},
 			false,
 		},
 	}
@@ -236,6 +237,96 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 			// }
 		})
 	}
+}
+func TestBadgerStore_Query(t *testing.T) {
+	type args struct {
+		filter     map[string]interface{}
+		aggregates map[string]interface{}
+		count      int
+		skip       int
+		store      string
+		opts       gostore.ObjectStoreOptions
+	}
+
+	db := createDB("Query")
+	defer removeDB("Query", db)
+	db.CreateTable("data", nil)
+	key := gostore.NewObjectId().String()
+	db.Save(key, "data", &map[string]interface{}{
+		"id":    key,
+		"name":  "osiloke emoekpere",
+		"type":  "person",
+		"count": "12",
+	})
+	key2 := gostore.NewObjectId().String()
+	db.Save(key2, "data", &map[string]interface{}{
+		"id":    key2,
+		"name":  "emike emoekpere",
+		"type":  "person",
+		"count": "10",
+	})
+	key3 := gostore.NewObjectId().String()
+	db.Save(key3, "data", &map[string]interface{}{
+		"id":    key3,
+		"name":  "oduffa emoekpere",
+		"type":  "person",
+		"count": "11",
+	})
+	key4 := gostore.NewObjectId().String()
+	db.Save(key4, "data", &map[string]interface{}{
+		"id":    key4,
+		"name":  "tony emoekpere",
+		"type":  "person",
+		"count": "11",
+	})
+	tests := []struct {
+		name string
+		s    *BadgerStore
+		args args
+		// want    gostore.ObjectRows
+		wantErr bool
+	}{
+		{
+			"get item",
+			db,
+			args{
+				map[string]interface{}{"type": "person"},
+				map[string]interface{}{
+					"top": map[string]interface{}{
+						"count": map[string]interface{}{
+							"name":  "topCount",
+							"field": "count",
+							"count": 2,
+						},
+					},
+				},
+				10,
+				0,
+				"data",
+				nil,
+			},
+			false,
+		},
+	}
+	tt := tests[0]
+	rows, agg, err := tt.s.Query(tt.args.filter, tt.args.aggregates, tt.args.count, tt.args.skip, tt.args.store, tt.args.opts)
+	if (err != nil) != tt.wantErr {
+		t.Errorf("BadgerStore.Query() error = %v, wantErr %v", err, tt.wantErr)
+		return
+	}
+	logger.Debug("facets", "facets", agg)
+	assert.NotNil(t, rows, "rows were empty")
+	assert.Equal(t, gostore.AggregateResult{
+		"topCount": gostore.Match{
+			Field:       "count",
+			UnMatched:   1,
+			Matched:     4,
+			Missing:     0,
+			NumberRange: search.NumericRangeFacets(nil),
+			DateRange:   search.DateRangeFacets(nil),
+			Top:         search.TermFacets{{"11", 2}, {"10", 1}},
+		},
+	}, agg, "aggregate data was not retrieved")
 }
 func TestBadgerStore_BatchInsert(t *testing.T) {
 	db := createDB("BatchInsert")

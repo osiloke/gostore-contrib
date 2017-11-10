@@ -122,7 +122,10 @@ func (k Kv) FilterGet(filter map[string]interface{}, store string, dst interface
 func (k Kv) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
 	panic("not implemented")
 }
+func (k Kv) Query(filter, aggregates map[string]interface{}, count int, skip int, store string, opts ObjectStoreOptions) (gostore.ObjectRows, *gostore.AggregateResult, error) {
 
+	return nil, nil, gostore.ErrNotFound
+}
 func (k Kv) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	panic("not implemented")
 }

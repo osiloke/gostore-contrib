@@ -178,7 +178,7 @@ func TestFilterGet(t *testing.T) {
 
 			Convey("Then filtering should return the object", func() {
 				var dst map[string]interface{}
-				err := DB.FilterGet(map[string]interface{}{"name": "osiloke"},
+				err := DB.FilterGet(map[string]interface{}{"q": map[string]interface{}{"name": "osiloke"}},
 					"data", &dst, nil)
 				if err != nil {
 					So(err, ShouldEqual, nil)
@@ -228,7 +228,7 @@ func TestFilterGetAll(t *testing.T) {
 			}
 
 			Convey("Then filtering should return two rows", func() {
-				rows, err := DB.FilterGetAll(map[string]interface{}{"count": 11},
+				rows, err := DB.FilterGetAll(map[string]interface{}{"q": map[string]interface{}{"count": 11}},
 					10, 0, "data", nil)
 				defer rows.Close()
 				if err != nil {
@@ -291,7 +291,7 @@ func TestFilterGetAllNoResults(t *testing.T) {
 			}
 
 			Convey("Then filtering for non existent rows should return ErrNotFound", func() {
-				_, err := DB.FilterGetAll(map[string]interface{}{"count": 12},
+				_, err := DB.FilterGetAll(map[string]interface{}{"q": map[string]interface{}{"count": 12}},
 					10, 0, "data", nil)
 				So(err, ShouldEqual, gostore.ErrNotFound)
 

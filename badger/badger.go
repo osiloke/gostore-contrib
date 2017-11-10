@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 var logger = log.New("gostore-contrib.badger")
@@ -463,79 +464,157 @@ func (s *BadgerStore) FilterReplace(filter map[string]interface{}, src interface
 }
 func (s *BadgerStore) FilterGet(filter map[string]interface{}, store string, dst interface{}, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterGet", "filter", filter, "Store", store, "opts", opts)
-	//check if filter contains a nested field which is used to traverse a sub bucket
-	var (
-		data [][]byte
-	)
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		//check if filter contains a nested field which is used to traverse a sub bucket
+		var (
+			data [][]byte
+		)
 
-	// res, err := s.Indexer.Query(common.GetQueryString(store, filter))
-	query := common.GetQueryString(store, filter)
-	res, err := s.Indexer.QueryWithOptions(query, 1, 0, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
-	if err != nil {
-		logger.Info("FilterGet failed", "query", query)
+		// res, err := s.Indexer.Query(indexer.GetQueryString(store, filter))
+		query := indexer.GetQueryString(store, query)
+		res, err := s.Indexer.QueryWithOptions(query, 1, 0, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+		if err != nil {
+			logger.Info("FilterGet failed", "query", query)
+			return err
+		}
+		logger.Info("FilterGet success", "query", query)
+		if res.Total == 0 {
+			logger.Info("FilterGet empty result", "result", res.String())
+			return gostore.ErrNotFound
+		}
+		data, err = s._Get(res.Hits[0].ID, store)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(data[1], dst)
 		return err
 	}
-	logger.Info("FilterGet success", "query", query)
-	if res.Total == 0 {
-		logger.Info("FilterGet empty result", "result", res.String())
-		return gostore.ErrNotFound
-	}
-	data, err = s._Get(res.Hits[0].ID, store)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(data[1], dst)
-	return err
+	return gostore.ErrNotFound
 
 }
 
-// FilterGetAll get all from filter
+// FilterGetAll allows you to filter a store if an indexer exists
 func (s *BadgerStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
-	q := common.GetQueryString(store, filter)
-	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
-	res, err := s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
-	if err != nil {
-		logger.Warn("err", "error", err, "res")
-		return nil, err
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		q := indexer.GetQueryString(store, query)
+		logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
+		res, err := s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+		if err != nil {
+			logger.Warn("err", "error", err, "res")
+			return nil, err
+		}
+		if res.Total == 0 {
+			return nil, gostore.ErrNotFound
+		}
+		// return NewIndexedBadgerRows(store, res.Total, res, &s), nil
+		return &SyncIndexRows{name: store, length: res.Total, result: res, bs: s}, nil
 	}
-	if res.Total == 0 {
-		return nil, gostore.ErrNotFound
+	return nil, gostore.ErrNotFound
+}
+
+func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, gostore.AggregateResult, error) {
+	if len(query) > 0 {
+		var err error
+		var res *bleve.SearchResult
+		agg := gostore.AggregateResult{}
+		q := indexer.GetQueryString(store, query)
+		if len(aggregates) == 0 {
+			logger.Info("Query", "count", count, "skip", skip, "Store", store, "query", q)
+			res, err = s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+
+		} else {
+			facets := indexer.Facets{}
+			for k, v := range aggregates {
+				if k == "top" && v != nil {
+					facets.Top = make(map[string]indexer.TopFacet)
+					for kk, vv := range v.(map[string]interface{}) {
+						f := vv.(map[string]interface{})
+						facets.Top[kk] = indexer.TopFacet{
+							Name:  f["name"].(string),
+							Field: "data." + f["field"].(string),
+							Count: f["count"].(int),
+						}
+					}
+				}
+				if k == "range" && v != nil {
+					facets.Range = make(map[string]indexer.RangeFacet)
+					for kk, vv := range v.(map[string]interface{}) {
+						f := vv.(map[string]interface{})
+						facets.Range[kk] = indexer.RangeFacet{
+							Name:  f["name"].(string),
+							Field: "data." + f["field"].(string),
+							Count: f["count"].(int),
+						}
+					}
+				}
+			}
+			logger.Info("Query", "count", count, "skip", skip, "Store", store, "query", q, "facets", facets)
+			res, err = s.Indexer.FacetedQuery(q, &facets, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+
+		}
+		if err != nil {
+			logger.Warn("err", "error", err, "res")
+			return nil, nil, err
+		}
+		if len(res.Facets) > 0 {
+			for k, v := range res.Facets {
+				agg[k] = gostore.Match{
+					Top:         v.Terms,
+					DateRange:   v.DateRanges,
+					NumberRange: v.NumericRanges,
+					Field:       strings.SplitN(v.Field, ".", 2)[1],
+					Matched:     v.Total,
+					UnMatched:   v.Other,
+					Missing:     v.Missing,
+				}
+			}
+		}
+		if res.Total == 0 {
+			return nil, agg, gostore.ErrNotFound
+		}
+
+		return &SyncIndexRows{name: store, length: res.Total, result: res, bs: s}, agg, err
 	}
-	// return NewIndexedBadgerRows(store, res.Total, res, &s), nil
-	return &SyncIndexRows{name: store, length: res.Total, result: res, bs: s}, nil
+	return nil, nil, gostore.ErrNotFound
 }
 
 func (s *BadgerStore) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterDelete", "filter", filter, "store", store)
-	res, err := s.Indexer.Query(common.GetQueryString(store, filter))
-	if err == nil {
-		if res.Total == 0 {
-			return gostore.ErrNotFound
-		}
-		for _, v := range res.Hits {
-			err = s._Delete(v.ID, store)
-			if err != nil {
-				break
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		res, err := s.Indexer.Query(indexer.GetQueryString(store, query))
+		if err == nil {
+			if res.Total == 0 {
+				return gostore.ErrNotFound
 			}
-			err = s.Indexer.UnIndexDocument(v.ID)
-			if err != nil {
-				break
+			for _, v := range res.Hits {
+				err = s._Delete(v.ID, store)
+				if err != nil {
+					break
+				}
+				err = s.Indexer.UnIndexDocument(v.ID)
+				if err != nil {
+					break
+				}
 			}
 		}
+		return err
 	}
-	return err
+	return gostore.ErrNotFound
 }
 
 func (s *BadgerStore) FilterCount(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) (int64, error) {
-	res, err := s.Indexer.Query(common.GetQueryString(store, filter))
-	if err != nil {
-		return 0, err
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		res, err := s.Indexer.Query(indexer.GetQueryString(store, query))
+		if err != nil {
+			return 0, err
+		}
+		if res.Total == 0 {
+			return 0, gostore.ErrNotFound
+		}
+		return int64(res.Total), nil
 	}
-	if res.Total == 0 {
-		return 0, gostore.ErrNotFound
-	}
-	return int64(res.Total), nil
+	return 0, gostore.ErrNotFound
 }
 
 //Misc gets

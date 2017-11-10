@@ -732,94 +732,114 @@ func (s *BoltStore) FilterReplace(filter map[string]interface{}, src interface{}
 }
 func (s *BoltStore) FilterGet(filter map[string]interface{}, store string, dst interface{}, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterGet", "filter", filter, "Store", store)
-	//check if filter contains a nested field which is used to traverse a sub bucket
-	var (
-		data [][]byte
-	)
 
-	// res, err := s.Indexer.Query(s.getQueryString(store, filter))
-	res, err := s.Indexer.QueryWithOptions(common.GetQueryString(store, filter), 1, 0, false, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
-	if err != nil {
-		return err
-	}
-	if res.Total == 0 {
-		return gostore.ErrNotFound
-	}
-	// if res.Total > 1 {
-	// 	return gostore.ErrDuplicatePk
-	// }
-	if bucket, err := s.getBucketList(store, filter); err == nil {
-		data, err = s._NestedGet([]byte(res.Hits[0].ID), bucket)
-	} else {
-		data, err = s._Get(res.Hits[0].ID, store)
-	}
-	if err != nil {
-		return err
-	}
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		//check if filter contains a nested field which is used to traverse a sub bucket
+		var (
+			data [][]byte
+		)
 
-	err = json.Unmarshal(data[1], dst)
-	return err
-
-}
-func (s *BoltStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
-	q := common.GetQueryString(store, filter)
-	logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
-	res, err := s.Indexer.QueryWithOptions(q, count, skip, false, []string{"*"}, indexer.OrderRequest([]string{"-_score", "-_id"}))
-	if err != nil {
-		logger.Warn("err", "error", err)
-		return nil, err
-	}
-	if res.Total == 0 {
-		return nil, gostore.ErrNotFound
-	}
-	// logger.Debug("result", "result", res.Hits)
-	// return NewIndexedSyncRows(store, res.Total, res, &s), nil
-	return &SyncIndexRows{name: store, length: res.Total, result: res, bs: s}, nil
-}
-
-func (s *BoltStore) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
-	logger.Info("FilterDelete", "filter", filter, "store", store)
-	res, err := s.Indexer.Query(common.GetQueryString(store, filter))
-	if err == nil {
+		// res, err := s.Indexer.Query(s.getQueryString(store, filter))
+		res, err := s.Indexer.QueryWithOptions(indexer.GetQueryString(store, query), 1, 0, false, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+		if err != nil {
+			return err
+		}
 		if res.Total == 0 {
 			return gostore.ErrNotFound
 		}
 		// if res.Total > 1 {
 		// 	return gostore.ErrDuplicatePk
 		// }
-
-		for _, v := range res.Hits {
-			// err = s._Delete(v.ID, store)
-			// if err != nil {
-			// 	break
-			// }
-			// err = s.Indexer.UnIndexDocument(v.ID)
-			// if err != nil {
-			// 	break
-			// }
-			logger.Info("_Delete", "key", v.ID, "bucket", store)
-			err = s.Db.Update(func(tx *boltdb.Tx) error {
-				b := tx.Bucket([]byte(store))
-				err := b.Delete([]byte(v.ID))
-				if err != nil {
-					return err
-				}
-				return s.Indexer.UnIndexDocument(v.ID)
-			})
+		if bucket, err := s.getBucketList(store, filter); err == nil {
+			data, err = s._NestedGet([]byte(res.Hits[0].ID), bucket)
+		} else {
+			data, err = s._Get(res.Hits[0].ID, store)
 		}
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(data[1], dst)
+		return err
 	}
-	return err
+	return gostore.ErrNotFound
+
+}
+func (s *BoltStore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
+
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		q := indexer.GetQueryString(store, query)
+		logger.Info("FilterGetAll", "count", count, "skip", skip, "Store", store, "query", q)
+		res, err := s.Indexer.QueryWithOptions(q, count, skip, false, []string{"*"}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+		if err != nil {
+			logger.Warn("err", "error", err)
+			return nil, err
+		}
+		if res.Total == 0 {
+			return nil, gostore.ErrNotFound
+		}
+		// logger.Debug("result", "result", res.Hits)
+		// return NewIndexedSyncRows(store, res.Total, res, &s), nil
+		return &SyncIndexRows{name: store, length: res.Total, result: res, bs: s}, nil
+	}
+	return nil, gostore.ErrNotFound
+}
+
+func (s *BoltStore) Query(filter, aggregates map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, gostore.AggregateResult, error) {
+
+	return nil, nil, gostore.ErrNotFound
+}
+func (s *BoltStore) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
+	logger.Info("FilterDelete", "filter", filter, "store", store)
+
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		res, err := s.Indexer.Query(indexer.GetQueryString(store, query))
+		if err == nil {
+			if res.Total == 0 {
+				return gostore.ErrNotFound
+			}
+			// if res.Total > 1 {
+			// 	return gostore.ErrDuplicatePk
+			// }
+
+			for _, v := range res.Hits {
+				// err = s._Delete(v.ID, store)
+				// if err != nil {
+				// 	break
+				// }
+				// err = s.Indexer.UnIndexDocument(v.ID)
+				// if err != nil {
+				// 	break
+				// }
+				logger.Info("_Delete", "key", v.ID, "bucket", store)
+				err = s.Db.Update(func(tx *boltdb.Tx) error {
+					b := tx.Bucket([]byte(store))
+					err := b.Delete([]byte(v.ID))
+					if err != nil {
+						return err
+					}
+					return s.Indexer.UnIndexDocument(v.ID)
+				})
+			}
+		}
+		return err
+	}
+	return gostore.ErrNotFound
 }
 
 func (s *BoltStore) FilterCount(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) (int64, error) {
-	res, err := s.Indexer.Query(common.GetQueryString(store, filter))
-	if err != nil {
-		return 0, err
+
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		res, err := s.Indexer.Query(indexer.GetQueryString(store, query))
+		if err != nil {
+			return 0, err
+		}
+		if res.Total == 0 {
+			return 0, gostore.ErrNotFound
+		}
+		return int64(res.Total), nil
 	}
-	if res.Total == 0 {
-		return 0, gostore.ErrNotFound
-	}
-	return int64(res.Total), nil
+	return 0, gostore.ErrNotFound
 }
 
 //Misc gets

@@ -22,6 +22,7 @@ func ReIndex(provider ProviderStore, index *Indexer) error {
 			u := strings.SplitN(k, "|", 2)
 			ID := u[1]
 			store := strings.TrimPrefix(u[0], "t$")
+			// logger.Debug("reindexing", "ID", ID, "val", v)
 			index.IndexDocument(ID, IndexedData{store, v})
 		}
 		iter.Next()
@@ -118,6 +119,23 @@ func (i Indexer) QueryWithOptions(q string, size, from int, explain bool, fields
 	return i.index.Search(searchRequest)
 }
 
+func (i Indexer) FacetedQuery(q string, facets *Facets, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+	if i.index == nil {
+		return nil, errors.New("No index")
+	}
+	query := bleve.NewQueryStringQuery(q)
+	searchRequest := bleve.NewSearchRequestOptions(query, size, from, explain)
+	if len(fields) > 0 {
+		searchRequest.Fields = fields
+	}
+	for _, opt := range opts {
+		if err := opt(searchRequest); err != nil {
+			logger.Warn("failed option passed")
+		}
+	}
+	AddFacets(searchRequest, facets)
+	return i.index.Search(searchRequest)
+}
 func (i Indexer) QueryWithOptionsHighlighted(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
