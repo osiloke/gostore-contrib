@@ -243,3 +243,93 @@ func TestIndexer_FacetedSearch(t *testing.T) {
 		})
 	})
 }
+
+type Ratings struct {
+	Distance int `json:"distance"`
+	Security int `json:"security"`
+}
+
+func TestIndexer_FacetedSearchRange(t *testing.T) {
+	type args struct {
+		q          string
+		facets     *Facets
+		size, from int
+		explain    bool
+		fields     []string
+		opts       []RequestOpt
+	}
+	indexPath := "./test.index"
+	os.RemoveAll(indexPath)
+	Convey("Create a new index at "+indexPath, t, func() {
+		index := NewDefaultIndexer(indexPath)
+		defer index.Close()
+		defer os.RemoveAll(indexPath)
+		Convey("Add mapping", func() {
+			// index.AddStructMapping("food")
+			Convey("Index document", func() {
+				reviews := []struct {
+					User   string  `json:"user"`
+					Place  string  `json:"place"`
+					Rating Ratings `json:"ratings"`
+				}{
+					{
+						User:   "kemi",
+						Place:  "briggs",
+						Rating: Ratings{2, 1},
+					},
+					{
+						User:   "yemi",
+						Place:  "briggs",
+						Rating: Ratings{3, 3},
+					},
+					{
+						User:   "femi",
+						Place:  "briggs",
+						Rating: Ratings{1, 3},
+					},
+					{
+						User:   "sean",
+						Place:  "briggs",
+						Rating: Ratings{3, 3},
+					},
+					{
+						User:   "sean",
+						Place:  "tonder",
+						Rating: Ratings{2, 2},
+					},
+					{
+						User:   "femi",
+						Place:  "tonder",
+						Rating: Ratings{2, 2},
+					},
+				}
+				for _, review := range reviews {
+					err := index.IndexDocument(review.Place+review.User, review)
+					if err != nil {
+						panic(err)
+					}
+				}
+				Convey("Faceted query search", func() {
+					res, err := index.FacetedQuery("+place=briggs", &Facets{
+						Range: map[string]RangeFacet{
+							"totalDistanceRating": RangeFacet{
+								Field: "ratings.distance",
+								Ranges: []interface{}{
+									map[string]interface{}{"name": "Low", "min": 1, "max": 2},
+									map[string]interface{}{"name": "Mid", "min": 2, "max": 3},
+									map[string]interface{}{"name": "High", "min": 3, "max": 4},
+								},
+							},
+						},
+					}, 1, 0, true, []string{"*"})
+					if err != nil {
+						panic(err)
+					}
+					So(res.Facets["totalDistanceRating"].NumericRanges[0].Count, ShouldEqual, 2)
+					So(res.Facets["totalDistanceRating"].NumericRanges[1].Count, ShouldEqual, 1)
+					So(res.Facets["totalDistanceRating"].NumericRanges[2].Count, ShouldEqual, 1)
+				})
+			})
+		})
+	})
+}

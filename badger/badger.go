@@ -6,6 +6,7 @@ import (
 	// "fmt"
 	"github.com/blevesearch/bleve"
 	badgerdb "github.com/dgraph-io/badger"
+	"github.com/gosexy/to"
 	"github.com/mgutz/logxi/v1"
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/common"
@@ -533,7 +534,7 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 						facets.Top[kk] = indexer.TopFacet{
 							Name:  f["name"].(string),
 							Field: "data." + f["field"].(string),
-							Count: f["count"].(int),
+							Count: int(to.Int64(f["count"])),
 						}
 					}
 				}
@@ -543,8 +544,7 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 						f := vv.(map[string]interface{})
 						facets.Range[kk] = indexer.RangeFacet{
 							Name:  f["name"].(string),
-							Field: "data." + f["field"].(string),
-							Count: f["count"].(int),
+							Range: f["ranges"].([]interface{}),
 						}
 					}
 				}

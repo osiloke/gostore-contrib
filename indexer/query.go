@@ -63,11 +63,35 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 	return queryString //strings.Replace(queryString, "\"", "", -1)
 }
 
+func floatVal(v interface{}) float64 {
+	if vv, ok := v.(float64); ok {
+		return vv
+	}
+	return float64(v.(int))
+}
+
+// AddRangeFacets add range dacets to request
+func addRangeFacets(searchRequest *bleve.SearchRequest, facets *Facets) error {
+	for k, facet := range facets.Range {
+		fieldFacet := bleve.NewFacetRequest(facet.Field, len(facet.Ranges))
+		for _, v := range facet.Ranges {
+			numericRange := v.(map[string]interface{})
+			name := numericRange["name"].(string)
+			min := floatVal(numericRange["min"])
+			max := floatVal(numericRange["max"])
+			fieldFacet.AddNumericRange(name, &min, &max)
+		}
+		searchRequest.AddFacet(k, fieldFacet)
+	}
+	return nil
+}
+
 // Add facets to a request
 func AddFacets(searchRequest *bleve.SearchRequest, facets *Facets) error {
 	for _, facet := range facets.Top {
 		fieldFacet := bleve.NewFacetRequest(facet.Field, facet.Count)
 		searchRequest.AddFacet(facet.Name, fieldFacet)
 	}
+	addRangeFacets(searchRequest, facets)
 	return nil
 }

@@ -6,9 +6,8 @@ type TopFacet struct {
 	Count int    `json:"count"`
 }
 type RangeFacet struct {
-	Name  string `json:"name"`
-	Field string `json:"field"`
-	Count int    `json:"count"`
+	Field  string        `json:"name"`
+	Ranges []interface{} `json:"ranges"`
 }
 
 type Facets struct {
