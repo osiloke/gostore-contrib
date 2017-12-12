@@ -531,7 +531,11 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 					facets.Top = make(map[string]indexer.TopFacet)
 					for kk, vv := range v.(map[string]interface{}) {
 						f := vv.(map[string]interface{})
-						facets.Top[kk] = indexer.TopFacet{
+						name := kk
+						if n, ok := f["name"].(string); ok {
+							name = n
+						}
+						facets.Top[name] = indexer.TopFacet{
 							Name:  f["name"].(string),
 							Field: "data." + f["field"].(string),
 							Count: int(to.Int64(f["count"])),
@@ -540,11 +544,23 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 				}
 				if k == "range" && v != nil {
 					facets.Range = make(map[string]indexer.RangeFacet)
-					for kk, vv := range v.(map[string]interface{}) {
-						f := vv.(map[string]interface{})
-						facets.Range[kk] = indexer.RangeFacet{
-							Name:  f["name"].(string),
-							Range: f["ranges"].([]interface{}),
+					if ranges, ok := v.(map[string]interface{}); ok {
+						for kk, vv := range ranges {
+							f := vv.(map[string]interface{})
+							name := kk
+							facets.Range[name] = indexer.RangeFacet{
+								Field:  "data." + f["field"].(string),
+								Ranges: f["ranges"].([]interface{}),
+							}
+						}
+					} else if ranges, ok := v.([]interface{}); ok {
+						for _, vv := range ranges {
+							f := vv.(map[string]interface{})
+							name := f["name"].(string)
+							facets.Range[name] = indexer.RangeFacet{
+								Field:  "data." + f["field"].(string),
+								Ranges: f["ranges"].([]interface{}),
+							}
 						}
 					}
 				}
@@ -559,14 +575,26 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 		}
 		if len(res.Facets) > 0 {
 			for k, v := range res.Facets {
-				agg[k] = gostore.Match{
-					Top:         v.Terms,
-					DateRange:   v.DateRanges,
-					NumberRange: v.NumericRanges,
-					Field:       strings.SplitN(v.Field, ".", 2)[1],
-					Matched:     v.Total,
-					UnMatched:   v.Other,
-					Missing:     v.Missing,
+				if len(v.NumericRanges) > 0 {
+					// numericRanges := make([]interface{}, len(v.NumericRanges))
+					// for i, n := range v.NumericRanges{
+					// 	numericRanges[i] = map[string]interface{}{"field": n.Name, "min": n.Min, "max": n.Max, "count": n.Count}
+					// }
+					agg[k] = gostore.Match{
+						NumberRange: v.NumericRanges,
+						Field:       strings.SplitN(v.Field, ".", 2)[1],
+						Matched:     v.Total,
+						UnMatched:   v.Other,
+						Missing:     v.Missing,
+					}
+				} else {
+					agg[k] = gostore.Match{
+						Top:       v.Terms,
+						Field:     strings.SplitN(v.Field, ".", 2)[1],
+						Matched:   v.Total,
+						UnMatched: v.Other,
+						Missing:   v.Missing,
+					}
 				}
 			}
 		}
@@ -579,28 +607,25 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 	return nil, nil, gostore.ErrNotFound
 }
 
-func (s *BadgerStore) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
-	logger.Info("FilterDelete", "filter", filter, "store", store)
-	if query, ok := filter["q"].(map[string]interface{}); ok {
-		res, err := s.Indexer.Query(indexer.GetQueryString(store, query))
-		if err == nil {
-			if res.Total == 0 {
-				return gostore.ErrNotFound
+func (s *BadgerStore) FilterDelete(query map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
+	logger.Info("FilterDelete", "filter", query, "store", store)
+	res, err := s.Indexer.Query(indexer.GetQueryString(store, query))
+	if err == nil {
+		if res.Total == 0 {
+			return gostore.ErrNotFound
+		}
+		for _, v := range res.Hits {
+			err = s._Delete(v.ID, store)
+			if err != nil {
+				break
 			}
-			for _, v := range res.Hits {
-				err = s._Delete(v.ID, store)
-				if err != nil {
-					break
-				}
-				err = s.Indexer.UnIndexDocument(v.ID)
-				if err != nil {
-					break
-				}
+			err = s.Indexer.UnIndexDocument(v.ID)
+			if err != nil {
+				break
 			}
 		}
-		return err
 	}
-	return gostore.ErrNotFound
+	return err
 }
 
 func (s *BadgerStore) FilterCount(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) (int64, error) {
