@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,14 +22,17 @@ import (
 
 var logger = log.New("gostore-contrib.bolt")
 
+// HasID defines stores that implement GetId
 type HasID interface {
 	GetId() string
 }
 
+// TableConfig config for store
 type TableConfig struct {
 	NestedBucketFieldMatcher map[string]*regexp.Regexp //defines fields to be used to extract nested buckets for data
 }
 
+// BoltStore a store with boltdb backend
 type BoltStore struct {
 	Bucket      []byte
 	Db          *boltdb.DB
@@ -38,14 +40,18 @@ type BoltStore struct {
 	tableConfig map[string]*TableConfig
 }
 
+// IndexedData indexed data stored
 type IndexedData struct {
 	Bucket string      `json:"bucket"`
 	Data   interface{} `json:"data"`
 }
 
+// Type implements HasType
 func (d *IndexedData) Type() string {
 	return "indexed_data"
 }
+
+// NewDBOnly creates only a db store, no index
 func NewDBOnly(dbPath string) (store *BoltStore, err error) {
 	var db *boltdb.DB
 	db, err = boltdb.Open(dbPath, 0600, nil)
@@ -55,6 +61,8 @@ func NewDBOnly(dbPath string) (store *BoltStore, err error) {
 	store = &BoltStore{[]byte("_default"), db, nil, make(map[string]*TableConfig)}
 	return
 }
+
+// NewWithPaths creates store with index at specified paths
 func NewWithPaths(boltPath, indexPath string) (store *BoltStore, err error) {
 	var db *boltdb.DB
 	db, err = boltdb.Open(boltPath, 0600, nil)
@@ -102,25 +110,17 @@ func NewWithBackup(path string, backupURI string) (store *BoltStore, err error) 
 		return
 	}
 	router := gin.Default()
-	router.GET("/", store.backupHandlerFunc)
+	router.GET("/", func(c *gin.Context) {
+		err := store.WriteToHTTP(c.Writer)
+		if err != nil {
+			http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
+		}
+	})
 	go router.Run(backupURI)
 
 	return
 }
 
-func (s *BoltStore) backupHandlerFunc(c *gin.Context) {
-	w := c.Writer
-	err := s.Db.View(func(tx *boltdb.Tx) error {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", `attachment; filename="bolt.db"`)
-		w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
-		_, err := tx.WriteTo(w)
-		return err
-	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
 func (s *BoltStore) CreateDatabase() error {
 	return nil
 }
