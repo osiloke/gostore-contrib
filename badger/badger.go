@@ -4,6 +4,11 @@ package badger
 import (
 	"encoding/json"
 	// "fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
 	"github.com/blevesearch/bleve"
 	badgerdb "github.com/dgraph-io/badger"
 	"github.com/gosexy/to"
@@ -11,10 +16,6 @@ import (
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/common"
 	"github.com/osiloke/gostore-contrib/indexer"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
 )
 
 var logger = log.New("gostore-contrib.badger")
@@ -97,12 +98,12 @@ func New(root string) (s *BadgerStore, err error) {
 //NewWithIndexer New badger store with indexer
 func NewWithIndexer(root string, index *indexer.Indexer) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
-		os.Mkdir(root, os.FileMode(0600))
+		os.Mkdir(root, os.FileMode(0755))
 		logger.Debug("created root path " + root)
 	}
 	dbPath := filepath.Join(root, "db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		os.Mkdir(dbPath, os.FileMode(0600))
+		os.Mkdir(dbPath, os.FileMode(0755))
 		logger.Debug("created badger directory " + dbPath)
 	}
 
@@ -124,10 +125,10 @@ func NewWithIndexer(root string, index *indexer.Indexer) (s *BadgerStore, err er
 	return
 }
 
-// /NewWithIndexer New badger store with indexer
+// NewWithIndex New badger store with indexer
 func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
-		os.Mkdir(root, os.FileMode(0600))
+		os.Mkdir(root, os.FileMode(0755))
 		logger.Debug("created root path " + root)
 	}
 	indexPath := filepath.Join(root, "db.index")
@@ -135,7 +136,7 @@ func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 	if index == "badger" {
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 
-			os.Mkdir(indexPath, os.FileMode(0600))
+			os.Mkdir(indexPath, os.FileMode(0755))
 			logger.Debug("made badger db index path", "path", indexPath)
 		}
 		ix = indexer.NewBadgerIndexer(indexPath)
