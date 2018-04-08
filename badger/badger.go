@@ -663,8 +663,8 @@ func (s *BadgerStore) BatchFilterDelete(filter []map[string]interface{}, store s
 
 func (s *BadgerStore) BatchInsert(data []interface{}, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
 	keys = make([]string, len(data))
+	b := s.Indexer.BatchIndex()
 	err = s.Db.Update(func(txn *badgerdb.Txn) error {
-		b := s.Indexer.BatchIndex()
 		for i, src := range data {
 			var key string
 			if _v, ok := src.(map[string]interface{}); ok {
@@ -688,7 +688,9 @@ func (s *BadgerStore) BatchInsert(data []interface{}, store string, opts gostore
 			if err != nil {
 				return err
 			}
-			b.Index(key, IndexedData{key, src})
+			indexedData := IndexedData{store, src}
+			logger.Debug("BatchInsert", "row", indexedData)
+			b.Index(key, indexedData)
 			keys[i] = key
 		}
 		return s.Indexer.Batch(b)
@@ -713,7 +715,7 @@ func (s *BadgerStore) BatchInsertKVAndIndex(rows [][][]byte, store string, opts 
 			if err != nil {
 				return err
 			}
-			b.Index(key, IndexedData{key, iData})
+			b.Index(key, IndexedData{store, iData})
 			keys[i] = key
 		}
 		logger.Debug("copied", "rows", len(keys))

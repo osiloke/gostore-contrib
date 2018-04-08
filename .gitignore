@@ -1,1 +1,6 @@
 *vendor*
+.test*
+test.*
+gostore.exe
+gostore
+old_badger_test
