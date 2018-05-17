@@ -2,8 +2,9 @@ package indexer
 
 import (
 	"fmt"
-	"github.com/blevesearch/bleve"
 	"strings"
+
+	"github.com/blevesearch/bleve"
 )
 
 func formatted(prefix, field string, valRune []rune) (queryString string) {
@@ -30,7 +31,10 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 		} else if vv, ok := v.(string); ok {
 			valRune := []rune(vv)
 			first := valRune[0]
-			if first == '\x3C' {
+			if string(first) == "^" { //match ^ regex
+				prefix := "+"
+				queryString = fmt.Sprintf(`%s %sdata.%s:/%v/`, queryString, prefix, k, string(valRune[1:]))
+			} else if first == '\x3C' {
 				if valRune[1] == '\x25' {
 					// something like <%d2016-12-12
 					queryString = fmt.Sprintf("%s %s", queryString, formatted("<", k, valRune[2:]))
