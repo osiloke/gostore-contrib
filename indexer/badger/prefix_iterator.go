@@ -39,11 +39,12 @@ func (i *PrefixIterator) Key() []byte {
 }
 
 func (i *PrefixIterator) Value() []byte {
-	vs, _ := i.iterator.Item().Value()
-	v := make([]byte, len(vs))
-	copy(v, vs)
-
-	return v
+	var valCopy []byte
+	i.iterator.Item().Value(func(v []byte) error {
+		valCopy = append([]byte{}, v...)
+		return nil
+	})
+	return valCopy
 }
 
 func (i *PrefixIterator) Valid() bool {

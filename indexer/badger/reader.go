@@ -20,12 +20,13 @@ func (r *Reader) Get(k []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	var valCopy []byte
+	err = item.Value(func(v []byte) error {
+		valCopy = append([]byte{}, v...)
+		return nil
+	})
 
-	vs, err := item.Value()
-	v := make([]byte, len(vs))
-	copy(v, vs)
-
-	return v, err
+	return valCopy, err
 }
 
 func (r *Reader) MultiGet(keys [][]byte) ([][]byte, error) {

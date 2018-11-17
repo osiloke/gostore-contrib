@@ -32,11 +32,12 @@ func (i *Iterator) Key() []byte {
 }
 
 func (i *Iterator) Value() []byte {
-	vs, _ := i.iterator.Item().Value()
-	v := make([]byte, len(vs))
-	copy(v, vs)
-
-	return v
+	var val []byte
+	i.iterator.Item().Value(func(v []byte) error {
+		val = append([]byte{}, v...)
+		return nil
+	})
+	return val
 }
 
 func (i *Iterator) Valid() bool {

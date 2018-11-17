@@ -203,13 +203,11 @@ func (s *BadgerStore) _Get(key, store string) ([][]byte, error) {
 			logger.Info("error getting key", "key", k, "err", err2.Error())
 			return err2
 		}
-		v, err2 := item.Value()
-		if err2 != nil {
-			return err2
-		}
-		val = make([]byte, len(v))
-		copy(val, v)
-		return nil
+		err2 = item.Value(func(v []byte) error {
+			val = append([]byte{}, v...)
+			return nil
+		})
+		return err2
 	})
 	if err != nil {
 		if err == badgerdb.ErrKeyNotFound {
@@ -257,20 +255,22 @@ func (s *BadgerStore) All(count int, skip int, store string) (gostore.ObjectRows
 		opts := badgerdb.DefaultIteratorOptions
 		opts.PrefetchSize = 10
 		it := txn.NewIterator(opts)
+		defer it.Close()
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			k := item.Key()
+			obj := make([][]byte, 2)
 			logger.Debug("key + " + string(k) + " retrieved")
-			v, err := item.Value()
+			err := item.Value(func(v []byte) error {
+				obj[1] = append([]byte{}, v...)
+				return nil
+			})
 			if err != nil {
 				return err
 			}
-			obj := make([][]byte, 2)
 			objs = append(objs, obj)
 			obj[0] = make([]byte, len(k))
-			obj[1] = make([]byte, len(v))
 			copy(obj[0], k)
-			copy(obj[1], v)
 		}
 		return nil
 	})
@@ -333,19 +333,21 @@ func (s *BadgerStore) Since(id string, count int, skip int, store string) (gosto
 		opts := badgerdb.DefaultIteratorOptions
 		opts.PrefetchSize = 10
 		it := txn.NewIterator(opts)
+		defer it.Close()
 		for it.Seek([]byte(s.keyForTableId(store, id))); it.Valid(); it.Next() {
 			item := it.Item()
 			k := item.Key()
-			v, err := item.Value()
+			obj := make([][]byte, 2)
+			err := item.Value(func(v []byte) error {
+				obj[1] = append([]byte{}, v...)
+				return nil
+			})
 			if err != nil {
 				return err
 			}
-			obj := make([][]byte, 2)
 			objs = append(objs, obj)
 			obj[0] = make([]byte, len(k))
-			obj[1] = make([]byte, len(v))
 			copy(obj[0], k)
-			copy(obj[1], v)
 		}
 		return nil
 	})
@@ -360,19 +362,21 @@ func (s *BadgerStore) Before(id string, count int, skip int, store string) (gost
 		opts.PrefetchSize = 10
 		opts.Reverse = true
 		it := txn.NewIterator(opts)
+		defer it.Close()
 		for it.Seek([]byte(s.keyForTableId(store, id))); it.Valid(); it.Next() {
 			item := it.Item()
 			k := item.Key()
-			v, err := item.Value()
+			obj := make([][]byte, 2)
+			err := item.Value(func(v []byte) error {
+				obj[1] = append([]byte{}, v...)
+				return nil
+			})
 			if err != nil {
 				return err
 			}
-			obj := make([][]byte, 2)
 			objs = append(objs, obj)
 			obj[0] = make([]byte, len(k))
-			obj[1] = make([]byte, len(v))
 			copy(obj[0], k)
-			copy(obj[1], v)
 		}
 		return nil
 	})
@@ -653,19 +657,11 @@ func (s *BadgerStore) BatchDelete(ids []interface{}, store string, opts gostore.
 	return gostore.ErrNotImplemented
 }
 
-func (s *BadgerStore) BatchUpdate(id []interface{}, data []interface{}, store string, opts gostore.ObjectStoreOptions) error {
-	return gostore.ErrNotImplemented
-}
-
-func (s *BadgerStore) BatchFilterDelete(filter []map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
-	return gostore.ErrNotImplemented
-}
-
-func (s *BadgerStore) BatchInsert(data []interface{}, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
-	keys = make([]string, len(data))
+func (s *BadgerStore) BatchUpdate(id []interface{}, data []interface{}, store string, opts gostore.ObjectStoreOptions) (err error) {
+	// keys = make([]string, len(data))
 	b := s.Indexer.BatchIndex()
 	err = s.Db.Update(func(txn *badgerdb.Txn) error {
-		for i, src := range data {
+		for _, src := range data {
 			var key string
 			if _v, ok := src.(map[string]interface{}); ok {
 				if k, ok := _v["id"].(string); ok {
@@ -691,10 +687,84 @@ func (s *BadgerStore) BatchInsert(data []interface{}, store string, opts gostore
 			indexedData := IndexedData{store, src}
 			logger.Debug("BatchInsert", "row", indexedData)
 			b.Index(key, indexedData)
-			keys[i] = key
 		}
 		return s.Indexer.Batch(b)
 	})
+	return
+}
+
+func (s *BadgerStore) BatchFilterDelete(filter []map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
+	return gostore.ErrNotImplemented
+}
+
+func (s *BadgerStore) BatchInsert(data []interface{}, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
+	keys = make([]string, len(data))
+	b := s.Indexer.BatchIndex()
+	// err = s.Db.Update(func(txn *badgerdb.Txn) error {
+	// 	for i, src := range data {
+	// 		var key string
+	// 		if _v, ok := src.(map[string]interface{}); ok {
+	// 			if k, ok := _v["id"].(string); ok {
+	// 				key = k
+	// 			} else {
+	// 				key = gostore.NewObjectId().String()
+	// 				_v["id"] = key
+	// 			}
+	// 		} else if _v, ok := src.(HasID); ok {
+	// 			key = _v.GetId()
+	// 		} else {
+	// 			key = gostore.NewObjectId().String()
+	// 		}
+	// 		data, err := json.Marshal(src)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		storeKey := []byte(s.keyForTableId(store, key))
+	// 		err = txn.Set(storeKey, data)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		indexedData := IndexedData{store, src}
+	// 		logger.Debug("BatchInsert", "row", indexedData)
+	// 		b.Index(key, indexedData)
+	// 		keys[i] = key
+	// 	}
+	// 	return s.Indexer.Batch(b)
+	// })
+	txn := s.Db.NewTransaction(true)
+	defer txn.Discard()
+	for i, src := range data {
+		var key string
+		if _v, ok := src.(map[string]interface{}); ok {
+			if k, ok := _v["id"].(string); ok {
+				key = k
+			} else {
+				key = gostore.NewObjectId().String()
+				_v["id"] = key
+			}
+		} else if _v, ok := src.(HasID); ok {
+			key = _v.GetId()
+		} else {
+			key = gostore.NewObjectId().String()
+		}
+		data, err := json.Marshal(src)
+		if err != nil {
+			return nil, err
+		}
+		storeKey := []byte(s.keyForTableId(store, key))
+		err = txn.Set(storeKey, data)
+		if err != nil {
+			return nil, err
+		}
+		indexedData := IndexedData{store, src}
+		logger.Debug("BatchInsert", "row", indexedData)
+		b.Index(key, indexedData)
+		keys[i] = key
+	}
+	if err2 := txn.Commit(); err2 != nil {
+		return nil, err2
+	}
+	err = s.Indexer.Batch(b)
 	return
 }
 func (s *BadgerStore) BatchInsertKVAndIndex(rows [][][]byte, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {

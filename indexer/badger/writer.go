@@ -38,11 +38,14 @@ func (w *Writer) ExecuteBatch(b store.KVBatch) error {
 		}
 		var v []byte
 		if err != badger.ErrKeyNotFound {
-			vt, err := item.Value()
+			err = item.Value(func(val []byte) error {
+				v = append([]byte{}, val...)
+				return nil
+			})
+
 			if err != nil {
 				return err
 			}
-			v = vt
 		}
 		mergedVal, fullMergeOk := w.s.mo.FullMerge(kb, v, mergeOps)
 		if !fullMergeOk {
@@ -51,7 +54,7 @@ func (w *Writer) ExecuteBatch(b store.KVBatch) error {
 		batch.Txn.Set(kb, mergedVal)
 	}
 
-	return batch.Txn.Commit(nil)
+	return batch.Txn.Commit()
 }
 
 func (w *Writer) Close() error {
