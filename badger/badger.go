@@ -218,7 +218,7 @@ func (s *BadgerStore) _Get(key, store string) ([][]byte, error) {
 	if len(val) == 0 {
 		return nil, gostore.ErrNotFound
 	}
-	logger.Debug("retrieved a key from badger table", "key", key, "storeKey", k)
+	logger.Debug("_Get success", "key", key, "storeKey", k)
 	data := make([][]byte, 2)
 	data[0] = []byte(key)
 	data[1] = val

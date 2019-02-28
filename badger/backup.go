@@ -3,6 +3,7 @@ package badger
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -20,4 +21,14 @@ func (s *BadgerStore) WriteToHTTP(w http.ResponseWriter) error {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="badger_%d_%s.db"`, since, date))
 	// w.Header().Set("Content-Length", strconv.Itoa(int(size)))
 	return nil
+}
+
+func (s *BadgerStore) Restore(filename string) error {
+	// Open File
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return s.Db.Load(f)
 }
