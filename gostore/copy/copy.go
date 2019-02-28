@@ -2,6 +2,10 @@ package copy
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/badger"
 	"github.com/osiloke/gostore-contrib/bolt"
@@ -9,9 +13,6 @@ import (
 	"github.com/osiloke/gostore-contrib/indexer"
 	_ "github.com/osiloke/gostore-contrib/indexer/badger"
 	"github.com/osiloke/gostore-contrib/log"
-	"os"
-	"os/signal"
-	"path/filepath"
 )
 
 type KVStore interface {
@@ -150,9 +151,9 @@ func Clone(batchCount int, leftStore, rightStore, leftStorePath, rightStorePath 
 
 				continue
 			}
-			if err := dst.(*badger.BadgerStore).Db.PurgeOlderVersions(); err != nil {
-				logger.Warn("unable to purge %s", err.Error())
-			}
+			// if err := dst.(*badger.BadgerStore).Db.PurgeOlderVersions(); err != nil {
+			// 	logger.Warn("unable to purge %s", err.Error())
+			// }
 			logger.Debug("copied %d rows from %s::%s to %s::%s", total, leftStore, store, rightStore, store)
 		}
 	}
