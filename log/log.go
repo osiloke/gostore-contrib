@@ -25,21 +25,41 @@ type Logger struct {
 }
 
 func (z *Logger) Info(msg string, v ...interface{}) {
-	z.log.Printf("INFO "+msg, v...)
+	z.log.Printf("INFO: "+msg, v...)
 }
 func (z *Logger) Warn(msg string, v ...interface{}) {
-	z.log.Printf("WARN "+msg, v...)
+	z.log.Printf("WARN: "+msg, v...)
 }
 func (z *Logger) Debug(msg string, v ...interface{}) {
-	z.log.Printf("DEBUG "+msg, v...)
+	z.log.Printf("DEBUG: "+msg, v...)
 }
 func (z *Logger) Error(msg string, v ...interface{}) {
-	z.log.Printf("ERROR "+msg, v...)
+	z.log.Printf("ERROR: "+msg, v...)
 }
 func (z *Logger) Fatal(msg string, v ...interface{}) {
-	z.log.Printf("FATAL "+msg, v...)
+	z.log.Printf("FATAL: "+msg, v...)
 }
 
+type XILogger struct {
+	prefix string
+	log    *log.Logger
+}
+
+func (z *XILogger) Info(msg string, v ...interface{}) {
+	z.log.Printf("INFO "+msg, v...)
+}
+func (z *XILogger) Warn(msg string, v ...interface{}) {
+	z.log.Printf("WARN "+msg, v...)
+}
+func (z *XILogger) Debug(msg string, v ...interface{}) {
+	z.log.Printf("DEBUG "+msg, v...)
+}
+func (z *XILogger) Error(msg string, v ...interface{}) {
+	z.log.Printf("ERROR "+msg, v...)
+}
+func (z *XILogger) Fatal(msg string, v ...interface{}) {
+	z.log.Printf("FATAL "+msg, v...)
+}
 func Info(msg string, v ...interface{}) {
 	defaultLogger.Info(msg, v...)
 }

@@ -14,10 +14,10 @@ import (
 	"github.com/blevesearch/bleve"
 	badgerdb "github.com/dgraph-io/badger"
 	"github.com/gosexy/to"
+	log "github.com/mgutz/logxi/v1"
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/common"
 	"github.com/osiloke/gostore-contrib/indexer"
-	"github.com/osiloke/gostore-contrib/log"
 )
 
 var logger = log.New("gostore-contrib.badger")
@@ -52,6 +52,23 @@ func (d *IndexedData) Type() string {
 	return "indexed_data"
 }
 
+func (s *BadgerStore) setupTicker() {
+	done := make(chan bool)
+	ticker := time.NewTicker(5 * time.Minute)
+	s.done = done
+	s.t = ticker
+	go func() {
+		for range ticker.C {
+		again:
+			err := s.Db.RunValueLogGC(0.7)
+			if err == nil {
+				goto again
+			}
+		}
+		done <- true
+	}()
+	logger.Debug("setup ticker")
+}
 func NewDBOnly(dbPath string) (s *BadgerStore, err error) {
 	opt := badgerdb.DefaultOptions
 	opt.Dir = dbPath
@@ -62,32 +79,22 @@ func NewDBOnly(dbPath string) (s *BadgerStore, err error) {
 		logger.Error("unable to create badgerdb", "err", err.Error(), "opt", opt)
 		return
 	}
-	done := make(chan bool)
-	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
-		for range ticker.C {
-		again:
-			err := db.RunValueLogGC(0.7)
-			if err == nil {
-				goto again
-			}
-		}
-		done <- true
-	}()
 	s = &BadgerStore{
 		[]byte("_default"),
 		db,
 		nil,
 		make(map[string]*TableConfig),
-		ticker,
-		done,
+		nil,
+		nil,
 	}
+	s.setupTicker()
 	return
 }
 
 // New badger store
 func New(root string) (s *BadgerStore, err error) {
 	dbPath := filepath.Join(root, "db")
+	logger.Debug("New badgerdb", "path", dbPath)
 	indexPath := filepath.Join(root, "db.index")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 
@@ -98,7 +105,7 @@ func New(root string) (s *BadgerStore, err error) {
 	opt := badgerdb.DefaultOptions
 	opt.Dir = dbPath
 	opt.ValueDir = dbPath
-	opt.SyncWrites = true
+	// opt.SyncWrites = true
 	db, err := badgerdb.Open(opt)
 	if err != nil {
 		logger.Error("unable to create badgerdb", "err", err.Error(), "opt", opt)
@@ -106,26 +113,15 @@ func New(root string) (s *BadgerStore, err error) {
 	}
 	indexMapping := bleve.NewIndexMapping()
 	index := indexer.NewIndexer(indexPath, indexMapping)
-	done := make(chan bool)
-	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
-		for range ticker.C {
-		again:
-			err := db.RunValueLogGC(0.7)
-			if err == nil {
-				goto again
-			}
-		}
-		done <- true
-	}()
 	s = &BadgerStore{
 		[]byte("_default"),
 		db,
 		index,
 		make(map[string]*TableConfig),
-		ticker,
-		done,
+		nil,
+		nil,
 	}
+	s.setupTicker()
 	return
 }
 
@@ -150,26 +146,15 @@ func NewWithIndexer(root string, index *indexer.Indexer) (s *BadgerStore, err er
 		logger.Error("unable to create badgerdb", "err", err.Error(), "opt", opt)
 		return
 	}
-	done := make(chan bool)
-	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
-		for range ticker.C {
-		again:
-			err := db.RunValueLogGC(0.7)
-			if err == nil {
-				goto again
-			}
-		}
-		done <- true
-	}()
 	s = &BadgerStore{
 		[]byte("_default"),
 		db,
 		index,
 		make(map[string]*TableConfig),
-		ticker,
-		done,
+		nil,
+		nil,
 	}
+	s.setupTicker()
 	//	e.CreateBucket(bucket)
 	return
 }
@@ -302,7 +287,7 @@ func (s *BadgerStore) All(count int, skip int, store string) (gostore.ObjectRows
 	var objs [][][]byte
 	err := s.Db.View(func(txn *badgerdb.Txn) error {
 		opts := badgerdb.DefaultIteratorOptions
-		opts.PrefetchSize = 10
+		opts.PrefetchSize = count / 2
 		it := txn.NewIterator(opts)
 		defer it.Close()
 		for it.Rewind(); it.Valid(); it.Next() {

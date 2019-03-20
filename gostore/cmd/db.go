@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/osiloke/gostore"
-	badgerdb "github.com/osiloke/gostore-contrib/badger"
+	"github.com/osiloke/gostore-contrib/badger"
 	boltstore "github.com/osiloke/gostore-contrib/bolt"
 
 	"github.com/spf13/cobra"
@@ -33,7 +33,7 @@ var (
 func getStore(name, path string) (gostore.ObjectStore, error) {
 	switch name {
 	case "BADGER":
-		return badgerdb.New(path)
+		return badger.New(path)
 	case "BOLT":
 		return boltstore.New(path)
 	}
@@ -66,7 +66,7 @@ var dbCmd = &cobra.Command{
 				ok, err := rows.Next(&d)
 				if !ok {
 					if err != nil {
-						println(err.Error())
+						println("error", err.Error())
 					}
 					break OUTER
 				}
@@ -74,7 +74,7 @@ var dbCmd = &cobra.Command{
 				if err != nil {
 					continue
 				}
-				fmt.Println(string(row))
+				println(string(row))
 			}
 			rows.Close()
 		case "get":
@@ -126,5 +126,5 @@ func init() {
 	dbCmd.Flags().StringVarP(&action, "action", "a", "get", "action to perform, get, save, update")
 	dbCmd.Flags().StringVarP(&key, "key", "k", "", "key to operate on")
 	dbCmd.Flags().StringVarP(&store, "store", "s", "_test", "store")
-	dbCmd.Flags().IntVarP(&count, "count", "c", 100, "count of rows to return")
+	dbCmd.Flags().IntVarP(&count, "count", "c", 1000, "count of rows to return")
 }
