@@ -8,6 +8,13 @@ import (
 	"github.com/blevesearch/bleve"
 )
 
+func reduceValueLenght(v string) string {
+	if len(v) > 100 {
+		return v[0:100]
+	}
+	return v
+}
+
 func formatted(prefix, field string, valRune []rune) (queryString string) {
 	v := strings.TrimSpace(string(valRune[1:]))
 	v = strings.Replace(v, "\"", "", -1)
@@ -40,9 +47,9 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 			first := valRune[0]
 			if string(first) == "^" { //match ^ regex
 				prefix := "+"
-				queryString = fmt.Sprintf(`%s %sdata.%s:/%v/`, queryString, prefix, k, string(valRune[1:]))
+				queryString = fmt.Sprintf(`%s %sdata.%s:/%v/`, queryString, prefix, k, reduceValueLenght(string(valRune[1:])))
 			} else if first == '\x3C' {
-				if valRune[1] == '\x25' {
+				if valRune[1] == '\x3A' {
 					// something like <%d2016-12-12
 					queryString = fmt.Sprintf("%s %s", queryString, formatted("<", k, valRune[2:]))
 				} else {
@@ -51,7 +58,7 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 					queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, v)
 				}
 			} else if first == '\x3E' {
-				if valRune[1] == '\x25' {
+				if valRune[1] == '\x3A' {
 					// something like >%d2016-12-12
 					queryString = fmt.Sprintf("%s %s", queryString, formatted(">", k, valRune[2:]))
 				} else {
@@ -65,7 +72,8 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 					prefix = "-"
 					v = string(valRune[1:])
 				}
-				queryString = fmt.Sprintf(`%s %sdata.%s:"%v"`, queryString, prefix, k, v)
+
+				queryString = fmt.Sprintf(`%s %sdata.%s:"%v"`, queryString, prefix, k, reduceValueLenght(string(fmt.Sprintf("%v", v))))
 			}
 		} else {
 			logger.Warn(store+" QueryString ["+k+"] was not parsed", "filter", filter, "value", v, "type", reflect.TypeOf(v))
@@ -97,7 +105,7 @@ func addRangeFacets(searchRequest *bleve.SearchRequest, facets *Facets) error {
 	return nil
 }
 
-// Add facets to a request
+// AddFacets facets to a request
 func AddFacets(searchRequest *bleve.SearchRequest, facets *Facets) error {
 	for _, facet := range facets.Top {
 		fieldFacet := bleve.NewFacetRequest(facet.Field, facet.Count)

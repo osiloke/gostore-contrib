@@ -90,3 +90,39 @@ func Test_addRangeFacets(t *testing.T) {
 		})
 	}
 }
+
+func TestGetQueryString(t *testing.T) {
+	type args struct {
+		store  string
+		filter map[string]interface{}
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			"testDateLess",
+			args{
+				"store",
+				map[string]interface{}{"day": "<:d2019-06-11T12:13:43.523888755Z"},
+			},
+			`+bucket:store +data.day:<"2019-06-11T12:13:43.523888755Z"`,
+		},
+		{
+			"testDateLess",
+			args{
+				"store",
+				map[string]interface{}{"day": ">:d2019-06-11T12:13:43.523888755Z"},
+			},
+			`+bucket:store +data.day:>"2019-06-11T12:13:43.523888755Z"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetQueryString(tt.args.store, tt.args.filter); got != tt.want {
+				t.Errorf("GetQueryString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

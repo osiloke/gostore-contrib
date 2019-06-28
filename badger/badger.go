@@ -112,6 +112,8 @@ func New(root string) (s *BadgerStore, err error) {
 		return
 	}
 	indexMapping := bleve.NewIndexMapping()
+	indexMapping.IndexDynamic = false
+	indexMapping.StoreDynamic = false 
 	index := indexer.NewIndexer(indexPath, indexMapping)
 	s = &BadgerStore{
 		[]byte("_default"),
@@ -219,6 +221,11 @@ func (s *BadgerStore) GetStore() interface{} {
 	return s.Db
 }
 
+// UpdateTransaction starts an update transaction
+func (s *BadgerStore) UpdateTransaction() gostore.Transaction{
+	return &BadgerTransaction{s.Db.NewTransaction(true)}
+}
+
 func (s *BadgerStore) CreateBucket(bucket string) error {
 	return nil
 }
@@ -258,6 +265,109 @@ func (s *BadgerStore) _Get(key, store string) ([][]byte, error) {
 	data[1] = val
 	return data, nil
 }
+
+// DeleteByPrefix deletes entries by key prefix
+// https://github.com/dgraph-io/badger/issues/598
+func (s *BadgerStore) DeleteByPrefix(prefix []byte) {
+	deleteKeys := func(keysForDelete [][]byte) error {
+		if err := s.Db.Update(func(txn *badgerdb.Txn) error {
+			for _, key := range keysForDelete {
+				if err := txn.Delete(key); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	collectSize := 100000
+	s.Db.View(func(txn *badgerdb.Txn) error {
+		opts := badgerdb.DefaultIteratorOptions
+		opts.AllVersions = false
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		keysForDelete := make([][]byte, 0, collectSize)
+		keysCollected := 0
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			key := it.Item().KeyCopy(nil)
+			keysForDelete = append(keysForDelete, key)
+			keysCollected++
+			if keysCollected == collectSize {
+				if err := deleteKeys(keysForDelete); err != nil {
+					panic(err)
+				}
+				keysForDelete = make([][]byte, 0, collectSize)
+				keysCollected = 0
+			}
+		}
+		if keysCollected > 0 {
+			if err := deleteKeys(keysForDelete); err != nil {
+				panic(err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// DeleteByPrefix deletes entries by key prefix
+// https://github.com/dgraph-io/badger/issues/598
+func (s *BadgerStore) FilterDeleteByPrefix(store string) error {
+	deleteKeys := func(keysForDelete [][]byte) error {
+		if err := s.Db.Update(func(txn *badgerdb.Txn) error {
+			for _, key := range keysForDelete {
+				if err := txn.Delete(key); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	collectSize := 100000 
+	b := s.Indexer.BatchIndex()
+	prefix := []byte(s.keyForTable(store))
+	return s.Db.View(func(txn *badgerdb.Txn) error {
+		opts := badgerdb.DefaultIteratorOptions
+		opts.AllVersions = false
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		keysForDelete := make([][]byte, 0, collectSize)
+		keysCollected := 0
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			key := it.Item().KeyCopy(nil)
+			keysForDelete = append(keysForDelete, key)
+			keysCollected++
+			b.Delete(string(strings.Split(string(key), "|")[1]))
+			if keysCollected == collectSize {
+				if err := deleteKeys(keysForDelete); err != nil {
+					return err
+				}
+				keysForDelete = make([][]byte, 0, collectSize)
+				keysCollected = 0
+				s.Indexer.Batch(b)
+			}
+		}
+		if keysCollected > 0 {
+			if err := deleteKeys(keysForDelete); err != nil {
+				panic(err)
+			}
+			s.Indexer.Batch(b)
+		}
+
+		return nil
+	})
+}
 func (s *BadgerStore) _Delete(key, store string) error {
 	storeKey := []byte(s.keyForTableId(store, key))
 	err := s.Db.Update(func(txn *badgerdb.Txn) error {
@@ -271,9 +381,11 @@ func (s *BadgerStore) _Delete(key, store string) error {
 	}
 	return nil
 }
+
 func (s *BadgerStore) _Save(key, store string, data []byte) error {
 	storeKey := []byte(s.keyForTableId(store, key))
 	err := s.Db.Update(func(txn *badgerdb.Txn) error {
+		logger.Debug("_Save", "key", key, "store", store, "storeKey", storeKey)
 		err := txn.Set(storeKey, data)
 		return err
 	})
@@ -448,7 +560,9 @@ func (s *BadgerStore) Save(key, store string, src interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	storeKey := []byte(s.keyForTableId(store, key))
+	skey := s.keyForTableId(store, key)
+	storeKey := []byte(skey)
+	logger.Debug("Save", "key", key, "store", store, "storeKey", skey)
 	err = s.Db.Update(func(txn *badgerdb.Txn) error {
 		err := txn.Set(storeKey, data)
 		if err != nil {
@@ -609,7 +723,7 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 
 		}
 		if err != nil {
-			logger.Warn("err", "error", err, "res")
+			logger.Warn("err", "error", err)
 			return nil, nil, err
 		}
 		if len(res.Facets) > 0 {
