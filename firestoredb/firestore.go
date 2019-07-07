@@ -10,12 +10,15 @@ import (
 	firebase "firebase.google.com/go"
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/common"
+	"github.com/osiloke/gostore-contrib/indexer"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
 type Firestore struct {
-	ctx context.Context
-	fs  *firestore.Client
+	ctx     context.Context
+	fs      *firestore.Client
+	Indexer *indexer.Indexer
 }
 
 // New*FirestoreStore create a new firestore
@@ -61,6 +64,45 @@ func (k *Firestore) CreateTable(table string, sample interface{}) error {
 	return nil
 }
 
+func (k *Firestore) ClearStore(store string) error {
+	client := k.fs
+	batchSize := 500
+	ref := client.Collection(store)
+	for {
+		// Get a batch of documents
+		iter := ref.Limit(batchSize).Documents(k.ctx)
+		numDeleted := 0
+
+		// Iterate through the documents, adding
+		// a delete operation for each one to a
+		// WriteBatch.
+		batch := client.Batch()
+		for {
+			doc, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return err
+			}
+
+			batch.Delete(doc.Ref)
+			numDeleted++
+		}
+
+		// If there are no documents to delete,
+		// the process is over.
+		if numDeleted == 0 {
+			return nil
+		}
+
+		_, err := batch.Commit(k.ctx)
+		if err != nil {
+			return err
+		}
+	}
+}
+
 // GetStore return firestore client
 func (k *Firestore) GetStore() interface{} {
 	return k.fs
@@ -73,7 +115,8 @@ func (k *Firestore) Stats(store string) (map[string]interface{}, error) {
 
 // All return all rows in a store
 func (k *Firestore) All(count int, skip int, store string) (gostore.ObjectRows, error) {
-	return nil, gostore.ErrNotImplemented
+	iter := k.fs.Collection(store).Limit(count).Offset(skip).Documents(k.ctx)
+	return &TransactionRows{iter}, nil
 }
 
 // AllCursor returns a cursor for listing all entries in a collection
@@ -139,7 +182,8 @@ func (k *Firestore) Save(key, store string, src interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return key, nil
+	// k.Indexer.IndexDocument(key, IndexedData{store, src})
+	return key, err
 }
 
 func (k *Firestore) SaveAll(store string, src ...interface{}) (keys []string, err error) {
@@ -213,20 +257,11 @@ func (k *Firestore) BatchInsert(data []interface{}, store string, opts gostore.O
 		} else {
 			key = gostore.NewObjectId().String()
 		}
-		data, err := json.Marshal(src)
-		if err != nil {
-			return nil, err
-		}
-		// storeKey := k.keyForTableId(store, key)
 		ref := k.fs.Collection(store).Doc(key)
-		batch.Set(ref, data)
-		// indexedData := IndexedData{store, src}
-		// logger.Debug("BatchInsert", "row", indexedData)
-		// b.Index(key, indexedData)
+		batch.Set(ref, src)
 		keys[i] = key
 	}
-	res, err := batch.Commit(k.ctx)
-	log.Println(res)
+	_, err = batch.Commit(k.ctx)
 	return keys, err
 
 }
