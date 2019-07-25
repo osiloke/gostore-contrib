@@ -17,6 +17,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"time"
+
+	"github.com/gosimple/slug"
+	"github.com/ungerik/go-dry"
 
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/badger"
@@ -26,8 +31,9 @@ import (
 )
 
 var (
-	path, name, action, data, key, store string
-	count                                int
+	path, name, action, data, dataFile, key, store string
+	count                                          int
+	csv                                            bool
 )
 
 func getStore(name, path string) (gostore.ObjectStore, error) {
@@ -60,23 +66,25 @@ var dbCmd = &cobra.Command{
 				fmt.Println(err.Error())
 				return
 			}
+			jrows := make([]map[string]interface{}, 0)
 		OUTER:
 			for {
 				var d map[string]interface{}
-				ok, err := rows.Next(&d)
+				b, ok := rows.NextRaw()
 				if !ok {
-					if err != nil {
-						println("error", err.Error())
-					}
 					break OUTER
 				}
-				row, err := json.MarshalIndent(&d, "", "    ")
-				if err != nil {
-					continue
+				json.Unmarshal(b, &d)
+				if err == nil {
+					jrows = append(jrows, d)
 				}
-				println(string(row))
 			}
 			rows.Close()
+			stringRows, err := json.MarshalIndent(&jrows, "", "    ")
+			if err != nil {
+				panic(err)
+			}
+			ioutil.WriteFile(fmt.Sprintf("dump-%v.json", slug.Make(path+string(time.Now().String()))), []byte(stringRows), 0644)
 		case "get":
 			_data := make(map[string]interface{})
 			if err != nil {
@@ -93,17 +101,38 @@ var dbCmd = &cobra.Command{
 			err = json.Unmarshal([]byte(data), _data)
 			if err != nil {
 				fmt.Println(err.Error())
-				return
+				break
 			}
 			_k := gostore.NewObjectId().String()
 			_k, err = db.Save(_k, store, &data)
 			if err != nil {
 				fmt.Println(err.Error())
+				break
 			}
 			fmt.Println(_k + " created")
 		case "update":
+			if dataFile != "" {
+				data, _ = dry.FileGetString(dataFile, time.Second*5)
+			}
+			_data := make(map[string]interface{})
+			err = json.Unmarshal([]byte(data), &_data)
+			if err != nil {
+				fmt.Println(err.Error())
+				break
+			}
+			_k, err := db.Save(key, store, &_data)
+			if err != nil {
+				fmt.Println(err.Error())
+				break
+			}
+			fmt.Println(_k + " updated")
 		case "delete":
-
+			err := db.Delete(key, store)
+			if err != nil {
+				fmt.Println(err.Error())
+				break
+			}
+			fmt.Println(key + " deleted")
 		}
 
 	},
@@ -125,6 +154,9 @@ func init() {
 	dbCmd.Flags().StringVarP(&name, "type", "t", "BADGER", "type of gostore")
 	dbCmd.Flags().StringVarP(&action, "action", "a", "get", "action to perform, get, save, update")
 	dbCmd.Flags().StringVarP(&key, "key", "k", "", "key to operate on")
+	dbCmd.Flags().StringVarP(&data, "data", "d", "", "data to create")
+	dbCmd.Flags().StringVarP(&dataFile, "dataFile", "i", "", "data to create")
 	dbCmd.Flags().StringVarP(&store, "store", "s", "_test", "store")
+	dbCmd.Flags().BoolVarP(&csv, "csv", "f", false, "output to csv")
 	dbCmd.Flags().IntVarP(&count, "count", "c", 1000, "count of rows to return")
 }
