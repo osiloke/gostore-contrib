@@ -1,14 +1,15 @@
 package badger
 
 import (
-	"github.com/osiloke/gostore"
-	// "github.com/osiloke/gostore-contrib/indexer"
-	"github.com/blevesearch/bleve/search"
-	"github.com/stretchr/testify/assert"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/blevesearch/bleve/search"
+	"github.com/osiloke/gostore"
+	"github.com/stretchr/testify/assert"
 )
 
 var rootPath = "./.testdata"
@@ -391,4 +392,82 @@ func TestBadgerStore_BatchInsert(t *testing.T) {
 		t.Run(tt.name, tt.fn)
 	}
 
+}
+
+func TestBadgerStore_SaveTX(t *testing.T) {
+	db := createDB("SaveTX")
+	defer removeDB("SaveTX", db)
+	store := "data"
+	db.CreateTable(store, nil)
+	rows := []map[string]interface{}{
+		map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "osiloke emoekpere",
+			"count": 10.0,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "emike emoekpere",
+			"count": 10.0,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "oduffa emoekpere",
+			"count": 11.0,
+		}, map[string]interface{}{
+			"id":    gostore.NewObjectId().String(),
+			"name":  "tony emoekpere",
+			"count": 11.0,
+		},
+	}
+	type args struct {
+		key   string
+		store string
+		src   interface{}
+		txn   gostore.Transaction
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			"saveOne",
+			args{
+				rows[0]["id"].(string),
+				"data",
+				rows[0],
+				db.UpdateTransaction(),
+			},
+			rows[0]["id"].(string),
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := db.SaveTX(tt.args.key, tt.args.store, tt.args.src, tt.args.txn)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BadgerStore.SaveTX() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			d := make(map[string]interface{})
+			err = db.GetTX(tt.args.key, tt.args.store, &d, tt.args.txn)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BadgerStore.SaveTX() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			t.Log(d)
+			if (d["id"].(string) != tt.args.key) != tt.wantErr {
+				t.Errorf("BadgerStore.SaveTX() error = %v, wantErr %v", errors.New("item not saved in transaction"), tt.wantErr)
+				return
+			}
+			err = tt.args.txn.Commit()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BadgerStore.SaveTX() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("BadgerStore.SaveTX() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

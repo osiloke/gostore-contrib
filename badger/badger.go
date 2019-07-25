@@ -113,7 +113,7 @@ func New(root string) (s *BadgerStore, err error) {
 	}
 	indexMapping := bleve.NewIndexMapping()
 	indexMapping.IndexDynamic = false
-	indexMapping.StoreDynamic = false 
+	indexMapping.StoreDynamic = false
 	index := indexer.NewIndexer(indexPath, indexMapping)
 	s = &BadgerStore{
 		[]byte("_default"),
@@ -222,8 +222,13 @@ func (s *BadgerStore) GetStore() interface{} {
 }
 
 // UpdateTransaction starts an update transaction
-func (s *BadgerStore) UpdateTransaction() gostore.Transaction{
-	return &BadgerTransaction{s.Db.NewTransaction(true)}
+func (s *BadgerStore) UpdateTransaction() gostore.Transaction {
+	return &BadgerTransaction{s.Db, s.Db.NewTransaction(true), "update"}
+}
+
+// FinishTransaction ebds transaction
+func (s *BadgerStore) FinishTransaction(tx gostore.Transaction) error {
+	return tx.Commit()
 }
 
 func (s *BadgerStore) CreateBucket(bucket string) error {
@@ -332,7 +337,7 @@ func (s *BadgerStore) FilterDeleteByPrefix(store string) error {
 		return nil
 	}
 
-	collectSize := 100000 
+	collectSize := 100000
 	b := s.Indexer.BatchIndex()
 	prefix := []byte(s.keyForTable(store))
 	return s.Db.View(func(txn *badgerdb.Txn) error {
@@ -406,7 +411,7 @@ func (s *BadgerStore) All(count int, skip int, store string) (gostore.ObjectRows
 			item := it.Item()
 			k := item.Key()
 			obj := make([][]byte, 2)
-			logger.Debug("key + " + string(k) + " retrieved")
+			// logger.Debug("key + " + string(k) + " retrieved")
 			err := item.Value(func(v []byte) error {
 				obj[1] = append([]byte{}, v...)
 				return nil
@@ -549,6 +554,7 @@ func (s *BadgerStore) Get(key string, store string, dst interface{}) error {
 	}
 	return nil
 }
+
 func (s *BadgerStore) SaveRaw(key string, val []byte, store string) error {
 	if err := s._Save(key, store, val); err != nil {
 		return err
@@ -572,6 +578,46 @@ func (s *BadgerStore) Save(key, store string, src interface{}) (string, error) {
 	})
 	return key, err
 }
+
+// SaveTX save a key within a transaction
+func (s *BadgerStore) SaveTX(key, store string, src interface{}, txn gostore.Transaction) error {
+	data, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	skey := s.keyForTableId(store, key)
+	storeKey := []byte(skey)
+	logger.Debug("SaveTX", "key", key, "store", store, "storeKey", skey)
+	err = txn.Set(storeKey, data)
+	if err != nil {
+		return err
+	}
+	err = s.Indexer.IndexDocument(key, IndexedData{store, src})
+	return err
+}
+
+// GetTX get a key within a transaction
+func (s *BadgerStore) GetTX(key string, store string, dst interface{}, txn gostore.Transaction) error {
+	k := s.keyForTableId(store, key)
+	storeKey := []byte(k)
+	var val []byte
+	val, err := txn.Get(storeKey)
+	if err != nil {
+		return err
+	}
+	if len(val) == 0 {
+		return gostore.ErrNotFound
+	}
+	logger.Debug("GetTX success", "key", key, "storeKey", k)
+	data := make([][]byte, 2)
+	data[0] = []byte(key)
+	data[1] = val
+	if err := json.Unmarshal(data[1], dst); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *BadgerStore) SaveAll(store string, src ...interface{}) (keys []string, err error) {
 	return nil, gostore.ErrNotImplemented
 }
@@ -604,6 +650,15 @@ func (s *BadgerStore) Update(key string, store string, src interface{}) error {
 func (s *BadgerStore) Replace(key string, store string, src interface{}) error {
 	_, err := s.Save(key, store, src)
 	return err
+}
+func (s *BadgerStore) ReplaceTX(key string, store string, src interface{}, tx gostore.Transaction) error {
+	return s.SaveTX(key, store, src, tx)
+}
+func (s *BadgerStore) DeleteTX(key string, store string, tx gostore.Transaction) error {
+	skey := s.keyForTableId(store, key)
+	storeKey := []byte(skey)
+	logger.Info("DeleteTX", "key", key)
+	return tx.Delete(storeKey)
 }
 func (s *BadgerStore) Delete(key string, store string) error {
 	return s._Delete(key, store)
@@ -642,6 +697,36 @@ func (s *BadgerStore) FilterGet(filter map[string]interface{}, store string, dst
 		}
 
 		err = json.Unmarshal(data[1], dst)
+		return err
+	}
+	return gostore.ErrNotFound
+
+}
+func (s *BadgerStore) FilterGetTX(filter map[string]interface{}, store string, dst interface{}, opts gostore.ObjectStoreOptions, tx gostore.Transaction) error {
+	logger.Info("FilterGetTX", "filter", filter, "Store", store, "opts", opts)
+	if query, ok := filter["q"].(map[string]interface{}); ok {
+		//check if filter contains a nested field which is used to traverse a sub bucket
+		// res, err := s.Indexer.Query(indexer.GetQueryString(store, filter))
+		query := indexer.GetQueryString(store, query)
+		res, err := s.Indexer.QueryWithOptions(query, 1, 0, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+		if err != nil {
+			logger.Info("FilterGetTX failed", "query", query)
+			return err
+		}
+		logger.Info("FilterGetTX success", "query", query)
+		if res.Total == 0 {
+			logger.Info("FilterGetTX empty result", "result", res.String())
+			return gostore.ErrNotFound
+		}
+		key := res.Hits[0].ID
+		k := s.keyForTableId(store, key)
+		storeKey := []byte(k)
+		data, err := tx.Get(storeKey)
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal(data, dst)
 		return err
 	}
 	return gostore.ErrNotFound
@@ -915,6 +1000,48 @@ func (s *BadgerStore) BatchInsert(data []interface{}, store string, opts gostore
 	err = s.Indexer.Batch(b)
 	return
 }
+
+func (s *BadgerStore) BatchInsertTX(data []interface{}, store string, opts gostore.ObjectStoreOptions, txn gostore.Transaction) (keys []string, err error) {
+	keys = make([]string, len(data))
+	b := s.Indexer.BatchIndex()
+	for i, src := range data {
+		var key string
+		if _v, ok := src.(map[string]interface{}); ok {
+			if k, ok := _v["id"].(string); ok {
+				key = k
+			} else {
+				key = gostore.NewObjectId().String()
+				_v["id"] = key
+			}
+		} else if _v, ok := src.(HasID); ok {
+			key = _v.GetId()
+		} else {
+			key = gostore.NewObjectId().String()
+		}
+		data, err := json.Marshal(src)
+		if err != nil {
+			return nil, err
+		}
+		storeKey := []byte(s.keyForTableId(store, key))
+		err = txn.Set(storeKey, data)
+		if err != nil {
+			return nil, err
+		}
+		indexedData := IndexedData{store, src}
+		logger.Debug("BatchInsertTX", "row", indexedData)
+		b.Index(key, indexedData)
+		keys[i] = key
+	}
+	if err2 := txn.Commit(); err2 != nil {
+		return nil, err2
+	}
+	if err = txn.Restart(); err != nil {
+		return
+	}
+	err = s.Indexer.Batch(b)
+	return
+}
+
 func (s *BadgerStore) BatchInsertKVAndIndex(rows [][][]byte, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
 	keys = make([]string, len(rows))
 	err = s.Db.Update(func(txn *badgerdb.Txn) error {
