@@ -45,6 +45,19 @@ func NewFirestoreStoreWithServiceAccount(ctx context.Context, serviceAccountFile
 	return &Firestore{fs: fs, ctx: ctx}
 }
 
+func NewFirestoreStoreWithJSON(ctx context.Context, data []byte) *Firestore {
+	sa := option.WithCredentialsJSON(data)
+	app, err := firebase.NewApp(ctx, nil, sa)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fs, err := app.Firestore(ctx)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return &Firestore{fs: fs, ctx: ctx}
+}
+
 func (s *Firestore) keyForTable(table string) string {
 	return "t$" + table
 }

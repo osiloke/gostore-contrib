@@ -2,14 +2,27 @@ package firestoredb
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	gostoretesting "github.com/osiloke/gostore-contrib/testing"
 )
 
+var sa []byte
+
+func init() {
+	serviceAccountFile, ok := os.LookupEnv("GOOGLE_SERVICE_ACCOUNT")
+	if ok {
+		data, err := ioutil.ReadFile(serviceAccountFile)
+		if err == nil {
+			sa = data
+		}
+	}
+}
 func TestFirestoreStore_Get(t *testing.T) {
 	ctx := context.Background()
-	db := NewFirestoreStoreWithServiceAccount(ctx, "./testServiceAccount.json")
+	db := NewFirestoreStoreWithJSON(ctx, sa)
 	if err := db.ClearStore("data"); err != nil {
 		t.Error(err)
 		return
@@ -19,7 +32,7 @@ func TestFirestoreStore_Get(t *testing.T) {
 
 func TestFirestoreStore_BatchInsert(t *testing.T) {
 	ctx := context.Background()
-	db := NewFirestoreStoreWithServiceAccount(ctx, "./testServiceAccount.json")
+	db := NewFirestoreStoreWithJSON(ctx, sa)
 	if err := db.ClearStore("data"); err != nil {
 		t.Error(err)
 		return

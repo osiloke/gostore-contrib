@@ -5,6 +5,7 @@ go 1.12
 require (
 	cloud.google.com/go v0.41.0
 	firebase.google.com/go v3.8.1+incompatible
+	github.com/AndreasBriese/bbloom v0.0.0-20190823232136-616930265c33 // indirect
 	github.com/RoaringBitmap/roaring v0.4.18 // indirect
 	github.com/Smerity/govarint v0.0.0-20150407073650-7265e41f48f1 // indirect
 	github.com/blevesearch/bleve v0.7.0
@@ -15,7 +16,9 @@ require (
 	github.com/couchbase/ghistogram v0.0.0 // indirect
 	github.com/couchbase/moss v0.0.0-20190322010551-a0cae174c498 // indirect
 	github.com/couchbase/vellum v0.0.0-20190626091642-41f2deade2cf // indirect
-	github.com/dgraph-io/badger v1.6.0
+	github.com/dgraph-io/badger v1.5.5-0.20190226225317-8115aed38f8f
+	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
+	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/dustin/gojson v0.0.0-20160307161227-2e71ec9dd5ad
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/gin-gonic/gin v1.4.0
