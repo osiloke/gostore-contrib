@@ -13,8 +13,8 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/boltdb/bolt v1.3.1
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
-	github.com/couchbase/ghistogram v0.0.0 // indirect
-	github.com/couchbase/moss v0.0.0-20190322010551-a0cae174c498 // indirect
+	github.com/couchbase/ghistogram v0.0.1-0.20170308220240-d910dd063dd6 // indirect
+	github.com/couchbase/moss v0.0.0-20180702235058-956632ec1bc3 // indirect
 	github.com/couchbase/vellum v0.0.0-20190626091642-41f2deade2cf // indirect
 	github.com/dgraph-io/badger v1.5.5-0.20190226225317-8115aed38f8f
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect

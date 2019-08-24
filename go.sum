@@ -46,6 +46,10 @@ github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e/go.mod h1:F5haX7
 github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f/go.mod h1:E3G3o1h8I7cfcXa63jLwjI0eiQQMgzzUDFVpN/nH/eA=
 github.com/couchbase/ghistogram v0.0.0 h1:NFnZziKRgasWhNaIB4h3C4sTVV86+mY4I37goTZh9yM=
 github.com/couchbase/ghistogram v0.0.0/go.mod h1:s1Jhy76zqfEecpNWJfWUiKZookAFaiGOEoyzgHt9i7k=
+github.com/couchbase/ghistogram v0.0.1-0.20170308220240-d910dd063dd6 h1:yKF3b1Xs9o2SIu2eOdJddvOvDSDWlNn5vCSt5Qb7fnM=
+github.com/couchbase/ghistogram v0.0.1-0.20170308220240-d910dd063dd6/go.mod h1:s1Jhy76zqfEecpNWJfWUiKZookAFaiGOEoyzgHt9i7k=
+github.com/couchbase/moss v0.0.0-20180702235058-956632ec1bc3 h1:7CQl+SJHrf7zJlHc8Y0RHqGL8/dpj2kxCupqQJY1r1U=
+github.com/couchbase/moss v0.0.0-20180702235058-956632ec1bc3/go.mod h1:mGI1GcdgmlL3Imff7Z+OjkkQ8qSKr443BuZ+qFgWbPQ=
 github.com/couchbase/moss v0.0.0-20190322010551-a0cae174c498 h1:b8rnI4JWbakUNfpmYDxGobTY/jTuF5zHLw0ID75yzuM=
 github.com/couchbase/moss v0.0.0-20190322010551-a0cae174c498/go.mod h1:mGI1GcdgmlL3Imff7Z+OjkkQ8qSKr443BuZ+qFgWbPQ=
 github.com/couchbase/vellum v0.0.0-20190626091642-41f2deade2cf h1:B4yFDSyYolVT4DsKpztKYPeme6/kRdLV7iPZmAv2tEE=
