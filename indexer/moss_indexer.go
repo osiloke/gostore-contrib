@@ -2,21 +2,22 @@ package indexer
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/index/store/moss"
 	"github.com/blevesearch/bleve/index/upsidedown"
 	"github.com/blevesearch/bleve/mapping"
-	"time"
 )
 
-// NewIndexer creates a new indexer
-func NewMossIndexer(indexPath string) (*Indexer, bool) {
+// NewMossIndexer creates a new indexer
+func NewMossIndexer(indexPath string) (Indexer, bool) {
 	indexMapping := bleve.NewIndexMapping()
 	return NewMossIndexerWithMapping(indexPath, indexMapping)
 }
 
-// NewIndexer creates a new indexer
-func NewMossIndexerWithMapping(indexPath string, indexMapping mapping.IndexMapping) (*Indexer, bool) {
+// NewMossIndexerWithMapping creates a new indexer
+func NewMossIndexerWithMapping(indexPath string, indexMapping mapping.IndexMapping) (Indexer, bool) {
 	// os.RemoveAll(indexPath)
 	index, err := bleve.Open(indexPath)
 	if err != nil {
@@ -42,8 +43,8 @@ func NewMossIndexerWithMapping(indexPath string, indexMapping mapping.IndexMappi
 		} else {
 			panic(err)
 		}
-		return &Indexer{index: index}, true
+		return &DefaultIndexer{index: index}, true
 	}
 	logger.Debug("opening existing MOSS index", "stats", index.Stats())
-	return &Indexer{index: index}, false
+	return &DefaultIndexer{index: index}, false
 }

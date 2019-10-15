@@ -3,6 +3,7 @@ package bolt
 //TODO: Extract methods into functions
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,9 +13,8 @@ import (
 
 	"github.com/blevesearch/bleve"
 	boltdb "github.com/boltdb/bolt"
-	"github.com/dustin/gojson"
 	"github.com/gin-gonic/gin"
-	"github.com/mgutz/logxi/v1"
+	log "github.com/mgutz/logxi/v1"
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/common"
 	"github.com/osiloke/gostore-contrib/indexer"
@@ -36,7 +36,7 @@ type TableConfig struct {
 type BoltStore struct {
 	Bucket      []byte
 	Db          *boltdb.DB
-	Indexer     *indexer.Indexer
+	Indexer     indexer.Indexer
 	tableConfig map[string]*TableConfig
 }
 
@@ -96,7 +96,7 @@ func NewWithIndex(boltPath string, index indexer.Indexer) (store *BoltStore, err
 	if err != nil {
 		return
 	}
-	store = &BoltStore{[]byte("_default"), db, &index, make(map[string]*TableConfig)}
+	store = &BoltStore{[]byte("_default"), db, index, make(map[string]*TableConfig)}
 	return
 }
 

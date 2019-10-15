@@ -444,7 +444,7 @@ func TestBadgerStore_SaveTX(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := db.SaveTX(tt.args.key, tt.args.store, tt.args.src, tt.args.txn)
+			err := db.SaveTX(tt.args.key, tt.args.store, tt.args.src, tt.args.txn)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("BadgerStore.SaveTX() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -465,9 +465,9 @@ func TestBadgerStore_SaveTX(t *testing.T) {
 				t.Errorf("BadgerStore.SaveTX() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("BadgerStore.SaveTX() = %v, want %v", got, tt.want)
-			}
+			// if got != tt.want {
+			// 	t.Errorf("BadgerStore.SaveTX() = %v, want %v", got, tt.want)
+			// }
 		})
 	}
 }

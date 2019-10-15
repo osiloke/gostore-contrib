@@ -35,7 +35,7 @@ type TableConfig struct {
 type BadgerStore struct {
 	Bucket      []byte
 	Db          *badgerdb.DB
-	Indexer     *indexer.Indexer
+	Indexer     indexer.Indexer
 	tableConfig map[string]*TableConfig
 	t           *time.Ticker
 	done        chan bool
@@ -128,7 +128,7 @@ func New(root string) (s *BadgerStore, err error) {
 }
 
 //NewWithIndexer New badger store with indexer
-func NewWithIndexer(root string, index *indexer.Indexer) (s *BadgerStore, err error) {
+func NewWithIndexer(root string, index indexer.Indexer) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		os.Mkdir(root, os.FileMode(0755))
 		logger.Debug("created root path " + root)
@@ -168,7 +168,7 @@ func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 		logger.Debug("created root path " + root)
 	}
 	indexPath := filepath.Join(root, "db.index")
-	var ix *indexer.Indexer
+	var ix indexer.Indexer
 	if index == "badger" {
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 
@@ -181,6 +181,39 @@ func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 		// var newMoss bool
 		ix, _ = indexer.NewMossIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
+		// if !newMoss {
+		if err := indexer.ReIndex(s, ix); err != nil {
+			return nil, err
+		}
+		// }
+	} else {
+		ix = indexer.NewDefaultIndexer(indexPath)
+		s, err = NewWithIndexer(root, ix)
+	}
+	return
+}
+
+// NewWithGeoIndex New badger store with geo indexer
+func NewWithGeoIndex(root, index, geoBucket, geoField string) (s *BadgerStore, err error) {
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		os.Mkdir(root, os.FileMode(0755))
+		logger.Debug("created root path " + root)
+	}
+	indexPath := filepath.Join(root, "db.index")
+	var ix indexer.Indexer
+	if index == "badger" {
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+
+			os.Mkdir(indexPath, os.FileMode(0755))
+			logger.Debug("made badger db index path", "path", indexPath)
+		}
+		ix = indexer.NewBadgerIndexer(indexPath)
+		s, err = NewWithIndexer(root, ix)
+	} else if index == "moss" {
+		// var newMoss bool
+
+		ix, _ = indexer.NewMossIndexerWithMapping(indexPath, indexer.NewGeoEnabledIndexMapping(root, geoBucket, geoField))
+		s, err = NewWithIndexer(root, &indexer.GeoIndexer{ix})
 		// if !newMoss {
 		if err := indexer.ReIndex(s, ix); err != nil {
 			return nil, err
@@ -847,7 +880,9 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 
 func (s *BadgerStore) FilterDelete(query map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterDelete", "filter", query, "store", store)
+	count := 1000
 	res, err := s.Indexer.Query(indexer.GetQueryString(store, query))
+	res, err = s.Indexer.QueryWithOptions(indexer.GetQueryString(store, query), count, 0, true, []string{})
 	if err == nil {
 		if res.Total == 0 {
 			return gostore.ErrNotFound

@@ -18,7 +18,7 @@ import (
 type Firestore struct {
 	ctx     context.Context
 	fs      *firestore.Client
-	Indexer *indexer.Indexer
+	Indexer indexer.Indexer
 }
 
 // New*FirestoreStore create a new firestore

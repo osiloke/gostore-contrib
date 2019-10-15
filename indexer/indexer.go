@@ -4,14 +4,16 @@ import (
 	"errors"
 	"fmt"
 
+	log "github.com/mgutz/logxi/v1"
+
 	"encoding/json"
+	"strings"
+
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/mapping"
-	"github.com/mgutz/logxi/v1"
-	"strings"
 )
 
-func ReIndex(provider ProviderStore, index *Indexer) error {
+func ReIndex(provider ProviderStore, index Indexer) error {
 	iter, _ := provider.Cursor()
 	for iter.Valid() {
 		key := iter.Key()
@@ -47,24 +49,24 @@ var OrderRequest = func(orderBy []string) RequestOpt {
 	}
 }
 
-type Indexer struct {
+type DefaultIndexer struct {
 	index bleve.Index
 }
 
-func (i *Indexer) Index() bleve.Index {
+func (i *DefaultIndexer) Index() bleve.Index {
 	return i.index
 }
-func (i *Indexer) BatchIndex() *bleve.Batch {
+func (i *DefaultIndexer) BatchIndex() *bleve.Batch {
 	return i.index.NewBatch()
 }
-func (i *Indexer) Batch(b *bleve.Batch) error {
+func (i *DefaultIndexer) Batch(b *bleve.Batch) error {
 	return i.index.Batch(b)
 }
-func (i *Indexer) AddDocumentMapping(name string, dm *mapping.DocumentMapping) {
+func (i *DefaultIndexer) AddDocumentMapping(name string, dm *mapping.DocumentMapping) {
 	// i.index.AddDocumentMapping(name, dm)
 }
 
-func (i Indexer) IndexDocument(id string, data interface{}) error {
+func (i DefaultIndexer) IndexDocument(id string, data interface{}) error {
 	if i.index == nil {
 		return errors.New("No index")
 	}
@@ -72,7 +74,7 @@ func (i Indexer) IndexDocument(id string, data interface{}) error {
 	return i.index.Index(id, data)
 }
 
-func (i Indexer) UnIndexDocument(id string) error {
+func (i DefaultIndexer) UnIndexDocument(id string) error {
 	if i.index == nil {
 		return errors.New("No index")
 	}
@@ -80,14 +82,14 @@ func (i Indexer) UnIndexDocument(id string) error {
 	return i.index.Delete(id)
 }
 
-func (i Indexer) QueryMap(q map[string]interface{}, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i DefaultIndexer) QueryMap(q map[string]interface{}, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	queryString := ""
 	for k, v := range q {
 		queryString = fmt.Sprintf("%s %s:%v", queryString, k, v)
 	}
 	return i.Query(queryString, opts...)
 }
-func (i Indexer) Query(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i *DefaultIndexer) Query(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
@@ -102,7 +104,7 @@ func (i Indexer) Query(q string, opts ...RequestOpt) (*bleve.SearchResult, error
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) QueryWithOptions(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i DefaultIndexer) QueryWithOptions(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
@@ -119,7 +121,7 @@ func (i Indexer) QueryWithOptions(q string, size, from int, explain bool, fields
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) FacetedQuery(q string, facets *Facets, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i DefaultIndexer) FacetedQuery(q string, facets *Facets, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
 		return nil, errors.New("No index")
 	}
@@ -136,7 +138,7 @@ func (i Indexer) FacetedQuery(q string, facets *Facets, size, from int, explain 
 	AddFacets(searchRequest, facets)
 	return i.index.Search(searchRequest)
 }
-func (i Indexer) QueryWithOptionsHighlighted(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i DefaultIndexer) QueryWithOptionsHighlighted(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
@@ -152,7 +154,7 @@ func (i Indexer) QueryWithOptionsHighlighted(q string, size, from int, explain b
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) MatchQuery(q, field string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i DefaultIndexer) MatchQuery(q, field string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
@@ -169,7 +171,7 @@ func (i Indexer) MatchQuery(q, field string, opts ...RequestOpt) (*bleve.SearchR
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) TermQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i DefaultIndexer) TermQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
@@ -184,7 +186,7 @@ func (i Indexer) TermQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, e
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) MatchPhraseQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
+func (i DefaultIndexer) MatchPhraseQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
 		return nil, errors.New("No index")
@@ -199,7 +201,7 @@ func (i Indexer) MatchPhraseQuery(q string, opts ...RequestOpt) (*bleve.SearchRe
 	return i.index.Search(searchRequest)
 }
 
-func (i Indexer) Close() {
+func (i DefaultIndexer) Close() {
 
 	if i.index == nil {
 		return
@@ -218,18 +220,36 @@ func GetIndex(indexPath string) (bleve.Index, bool) {
 	}
 	return index, true
 }
-func NewIndexerFromIndex(index bleve.Index) *Indexer {
-	return &Indexer{index: index}
+func NewIndexerFromIndex(index bleve.Index) Indexer {
+	return &DefaultIndexer{index: index}
 }
 
 // NewIndexer creates a new indexer
-func NewDefaultIndexer(indexPath string) *Indexer {
+func NewDefaultIndexer(indexPath string) Indexer {
 	indexMapping := bleve.NewIndexMapping()
 	return NewIndexer(indexPath, indexMapping)
 }
 
+// NewGeoEnabledIndexMapping creates a new mapping with geo support
+func NewGeoEnabledIndexMapping(indexPath, geoStoreName, typeField string) mapping.IndexMapping {
+	geoMapping := bleve.NewDocumentMapping()
+	locationMapping := bleve.NewGeoPointFieldMapping()
+	locationMapping.IncludeTermVectors = true
+	locationMapping.IncludeInAll = true
+	locationMapping.Index = true
+	locationMapping.Store = true
+	locationMapping.Type = "geopoint"
+	geoMapping.AddFieldMappingsAt("geo", locationMapping)
+	indexMapping := bleve.NewIndexMapping()
+	indexMapping.IndexDynamic = false
+	indexMapping.StoreDynamic = false
+	indexMapping.AddDocumentMapping(geoStoreName, geoMapping)
+	indexMapping.TypeField = typeField
+	return indexMapping
+}
+
 // NewIndexer creates a new indexer
-func NewIndexer(indexPath string, indexMapping mapping.IndexMapping) *Indexer {
+func NewIndexer(indexPath string, indexMapping mapping.IndexMapping) *DefaultIndexer {
 	index, err := bleve.Open(indexPath)
 	if err != nil {
 		logger.Debug("Error opening indexpath", "path", indexPath, "verbose", string(err.Error()))
@@ -244,9 +264,14 @@ func NewIndexer(indexPath string, indexMapping mapping.IndexMapping) *Indexer {
 				}
 				return nil
 			}
-			return &Indexer{index: index}
+			return &DefaultIndexer{index: index}
 		}
 		panic(err)
 	}
-	return &Indexer{index: index}
+	return &DefaultIndexer{index: index}
+}
+
+// GeoIndexer an indexer that can handle geo queries
+type GeoIndexer struct {
+	Indexer
 }

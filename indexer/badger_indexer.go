@@ -12,13 +12,13 @@ import (
 )
 
 // NewIndexer creates a new indexer
-func NewBadgerIndexer(indexPath string) *Indexer {
+func NewBadgerIndexer(indexPath string) Indexer {
 	indexMapping := bleve.NewIndexMapping()
 	return NewBadgerIndexerWithMapping(indexPath, indexMapping)
 }
 
 // NewIndexer creates a new indexer
-func NewBadgerIndexerWithMapping(indexPath string, indexMapping mapping.IndexMapping) *Indexer {
+func NewBadgerIndexerWithMapping(indexPath string, indexMapping mapping.IndexMapping) Indexer {
 	index, err := bleve.Open(indexPath)
 	if err != nil {
 		logger.Debug("Error opening indexpath", "path", indexPath, "verbose", string(err.Error()))
@@ -42,5 +42,5 @@ func NewBadgerIndexerWithMapping(indexPath string, indexMapping mapping.IndexMap
 		}
 	}
 	logger.Debug("opening existing index", "stats", index.Stats())
-	return &Indexer{index: index}
+	return &DefaultIndexer{index: index}
 }
