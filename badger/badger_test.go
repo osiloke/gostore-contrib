@@ -34,6 +34,24 @@ func createDB(name string) *BadgerStore {
 	}
 	return _db
 }
+
+func createGeoDB(name, geoField, documentName, typefield string) *BadgerStore {
+	mode := int(0777)
+	testDbPath := filepath.Join(rootPath, name)
+	indexPath := filepath.Join(testDbPath, "/db.index")
+	dbPath := filepath.Join(testDbPath, "/db")
+	os.Mkdir(testDbPath, os.FileMode(mode))
+	os.RemoveAll(dbPath)
+	os.RemoveAll(indexPath)
+	os.Mkdir(dbPath, os.FileMode(mode))
+	// ix, _ := indexer.NewMossIndexer(indexPath)
+	_db, err := NewWithGeoIndex(testDbPath, "moss", geoField, documentName, typefield)
+	if err != nil {
+		panic(err)
+	}
+	logger.Info("created geo db")
+	return _db
+}
 func removeDB(name string, db *BadgerStore) {
 	if db != nil {
 		db.Close()
@@ -157,25 +175,25 @@ func TestBadgerStore_FilterGetAll(t *testing.T) {
 	defer removeDB("filterGetAll", db)
 	db.CreateTable("data", nil)
 	key := gostore.NewObjectId().String()
-	db.Save(key, "data", &map[string]interface{}{
+	db.Save(key, "data", map[string]interface{}{
 		"id":    key,
 		"name":  "osiloke emoekpere",
 		"count": 10.0,
 	})
 	key2 := gostore.NewObjectId().String()
-	db.Save(key2, "data", &map[string]interface{}{
+	db.Save(key2, "data", map[string]interface{}{
 		"id":    key2,
 		"name":  "emike emoekpere",
 		"count": 10.0,
 	})
 	key3 := gostore.NewObjectId().String()
-	db.Save(key3, "data", &map[string]interface{}{
+	db.Save(key3, "data", map[string]interface{}{
 		"id":    key3,
 		"name":  "oduffa emoekpere",
 		"count": 11.0,
 	})
 	key4 := gostore.NewObjectId().String()
-	db.Save(key4, "data", &map[string]interface{}{
+	db.Save(key4, "data", map[string]interface{}{
 		"id":    key4,
 		"name":  "tony emoekpere",
 		"count": 11.0,
@@ -253,28 +271,28 @@ func TestBadgerStore_Query(t *testing.T) {
 	defer removeDB("Query", db)
 	db.CreateTable("data", nil)
 	key := gostore.NewObjectId().String()
-	db.Save(key, "data", &map[string]interface{}{
+	db.Save(key, "data", map[string]interface{}{
 		"id":    key,
 		"name":  "osiloke emoekpere",
 		"type":  "person",
 		"count": "12",
 	})
 	key2 := gostore.NewObjectId().String()
-	db.Save(key2, "data", &map[string]interface{}{
+	db.Save(key2, "data", map[string]interface{}{
 		"id":    key2,
 		"name":  "emike emoekpere",
 		"type":  "person",
 		"count": "10",
 	})
 	key3 := gostore.NewObjectId().String()
-	db.Save(key3, "data", &map[string]interface{}{
+	db.Save(key3, "data", map[string]interface{}{
 		"id":    key3,
 		"name":  "oduffa emoekpere",
 		"type":  "person",
 		"count": "11",
 	})
 	key4 := gostore.NewObjectId().String()
-	db.Save(key4, "data", &map[string]interface{}{
+	db.Save(key4, "data", map[string]interface{}{
 		"id":    key4,
 		"name":  "tony emoekpere",
 		"type":  "person",
@@ -329,6 +347,113 @@ func TestBadgerStore_Query(t *testing.T) {
 		},
 	}, agg, "aggregate data was not retrieved")
 }
+
+func TestBadgerStore_GeoQuery(t *testing.T) {
+	type args struct {
+		lon      float64
+		lat      float64
+		distance string
+		filter   map[string]interface{}
+		count    int
+		skip     int
+		store    string
+		opts     gostore.ObjectStoreOptions
+	}
+
+	db := createGeoDB("GeoQuery", "location", "people", "bucket")
+	// defer removeDB("GeoQuery", db)
+	db.CreateTable("data", nil)
+	key := gostore.NewObjectId().String()
+	_, err := db.SaveWithGeo(key, "people", map[string]interface{}{
+		"id":    key,
+		"name":  "osiloke emoekpere",
+		"type":  "person",
+		"mode":  "shirt",
+		"count": "12",
+		"home": map[string]interface{}{
+			"location": map[string]interface{}{
+				"accuracy": "APPROXIMATE",
+				"lat":      37.5483,
+				"lon":      -121.989,
+			}},
+	}, "home.location")
+	if err != nil {
+		panic(err)
+	}
+	key2 := gostore.NewObjectId().String()
+	db.SaveWithGeo(key2, "people", map[string]interface{}{
+		"id":    key2,
+		"name":  "emike emoekpere",
+		"type":  "person",
+		"mode":  "shirt",
+		"count": "10",
+		"home": map[string]interface{}{
+			"location": map[string]interface{}{
+				"accuracy": "ROOFTOP",
+				"lat":      38.8999,
+				"lon":      -77.0272,
+			}},
+	}, "home.location")
+	key3 := gostore.NewObjectId().String()
+	db.SaveWithGeo(key3, "people", map[string]interface{}{
+		"id":    key3,
+		"name":  "oduffa emoekpere",
+		"type":  "person",
+		"count": "11",
+		"mode":  "shirt",
+		"home": map[string]interface{}{
+			"location": map[string]interface{}{
+				"accuracy": "RANGE_INTERPOLATED",
+				"lat":      37.3775,
+				"lon":      -122.03,
+			}},
+	}, "home.location")
+	key4 := gostore.NewObjectId().String()
+	db.SaveWithGeo(key4, "people", map[string]interface{}{
+		"id":    key4,
+		"name":  "tony emoekpere",
+		"type":  "person",
+		"count": "11",
+		"mode":  "shirt",
+		"home": map[string]interface{}{
+			"location": map[string]interface{}{
+				"accuracy": "ROOFTOP",
+				"lat":      38.9911,
+				"lon":      -121.988,
+			}},
+	}, "home.location")
+	tests := []struct {
+		name string
+		s    *BadgerStore
+		args args
+		// want    gostore.ObjectRows
+		wantErr bool
+	}{
+		{
+			"get item",
+			db,
+			args{
+				-77.0272, 38.8999,
+				"1mi",
+				map[string]interface{}{"type": "person"},
+				10,
+				0,
+				"people",
+				nil,
+			},
+			false,
+		},
+	}
+	tt := tests[0]
+	rows, err := tt.s.GeoQuery(tt.args.lon, tt.args.lat, tt.args.distance, tt.args.filter, tt.args.count, tt.args.skip, tt.args.store, tt.args.opts)
+	if (err != nil) != tt.wantErr {
+		t.Errorf("BadgerStore.GeoQuery() error = %v, wantErr %v", err, tt.wantErr)
+		return
+	}
+	t.Log(rows)
+	assert.NotNil(t, rows, "rows were empty")
+}
+
 func TestBadgerStore_BatchInsert(t *testing.T) {
 	db := createDB("BatchInsert")
 	defer removeDB("BatchInsert", db)

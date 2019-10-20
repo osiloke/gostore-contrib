@@ -1,9 +1,10 @@
 package indexer
 
 import (
-	. "github.com/smartystreets/goconvey/convey"
 	"os"
 	"testing"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestIndexCreation(t *testing.T) {
@@ -328,6 +329,254 @@ func TestIndexer_FacetedSearchRange(t *testing.T) {
 					So(res.Facets["totalDistanceRating"].NumericRanges[0].Count, ShouldEqual, 2)
 					So(res.Facets["totalDistanceRating"].NumericRanges[1].Count, ShouldEqual, 1)
 					So(res.Facets["totalDistanceRating"].NumericRanges[2].Count, ShouldEqual, 1)
+				})
+			})
+		})
+	})
+}
+
+func TestIndexer_GeoDistance(t *testing.T) {
+	type args struct {
+		q          string
+		facets     *Facets
+		size, from int
+		explain    bool
+		fields     []string
+		opts       []RequestOpt
+	}
+	indexPath := "./test.index"
+	os.RemoveAll(indexPath)
+	Convey("Create a new index at "+indexPath, t, func() {
+		index := GeoIndexer{"geo", NewIndexer(indexPath, NewGeoEnabledIndexMapping("geo", "people", "bucket"))}
+		defer index.Close()
+		defer os.RemoveAll(indexPath)
+		Convey("Add mapping", func() {
+			// index.AddStructMapping("food")
+			Convey("Index document", func() {
+				reviews := []struct {
+					User   string                 `json:"user"`
+					Place  string                 `json:"place"`
+					Bucket string                 `json:"bucket"`
+					Geo    map[string]interface{} `json:"geo"`
+				}{
+					{
+						User:   "kemi",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: map[string]interface{}{
+							"accuracy": "APPROXIMATE",
+							"lat":      37.5483,
+							"lon":      -121.989,
+						},
+					},
+					{
+						User:   "yemi",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: map[string]interface{}{
+							"accuracy": "ROOFTOP",
+							"lat":      38.8999,
+							"lon":      -77.0272,
+						},
+					},
+					{
+						User:   "femi",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: map[string]interface{}{
+							"accuracy": "RANGE_INTERPOLATED",
+							"lat":      37.3775,
+							"lon":      -122.03,
+						},
+					},
+					{
+						User:   "sean",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: map[string]interface{}{
+							"accuracy": "ROOFTOP",
+							"lat":      38.9911,
+							"lon":      -121.988,
+						},
+					},
+					{
+						User:   "sean",
+						Place:  "tonder",
+						Bucket: "people",
+						Geo: map[string]interface{}{
+							"accuracy": "ROOFTOP",
+							"lat":      37.5441,
+							"lon":      -121.988,
+						},
+					},
+					{
+						User:   "femi",
+						Place:  "tonder",
+						Bucket: "people",
+						Geo: map[string]interface{}{
+							"accuracy": "RANGE_INTERPOLATED",
+							"lat":      39.0324,
+							"lon":      -77.4097,
+						},
+					},
+				}
+				for _, review := range reviews {
+					m := map[string]interface{}{
+						"user":   review.User,
+						"place":  review.Place,
+						"bucket": review.Bucket,
+						"geo":    review.Geo,
+					}
+					err := index.IndexDocument(review.Place+review.User, m)
+					if err != nil {
+						panic(err)
+					}
+				}
+				Convey("Geo Distance search", func() {
+					lon, lat := -77.4097, 39.0324
+					res, err := index.GeoDistance(lon, lat, "100mi", OrderRequest([]string{"-_score", "-_id"}))
+					if err != nil {
+						panic(err)
+					}
+					So(res.Hits.Len(), ShouldEqual, 2)
+				})
+			})
+		})
+	})
+}
+
+type GeoLocation struct {
+	Location map[string]interface{} `json:"location"`
+}
+
+func TestIndexer_GeoDistanceQuery(t *testing.T) {
+	type args struct {
+		q          string
+		facets     *Facets
+		size, from int
+		explain    bool
+		fields     []string
+		opts       []RequestOpt
+	}
+	indexPath := "./test.index"
+	// os.RemoveAll(indexPath)
+	Convey("Create a new index at "+indexPath, t, func() {
+		index := GeoIndexer{"location", NewIndexer(indexPath, NewGeoEnabledIndexMapping("location", "people", "bucket"))}
+		// index := NewDefaultIndexer(indexPath)
+		defer index.Close()
+		// defer os.RemoveAll(indexPath)
+		Convey("Add mapping", func() {
+			// index.AddStructMapping("food")
+			Convey("Index document", func() {
+				reviews := []struct {
+					User   string      `json:"user"`
+					Place  string      `json:"place"`
+					Bucket string      `json:"bucket"`
+					Geo    GeoLocation `json:"geo"`
+				}{
+					{
+						User:   "kemi",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "APPROXIMATE",
+							"lat":      37.5483,
+							"lon":      -121.989,
+						}},
+					},
+					{
+						User:   "yemi",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "ROOFTOP",
+							"lat":      38.8999,
+							"lon":      -77.0272,
+						}},
+					},
+					{
+						User:   "femi",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "RANGE_INTERPOLATED",
+							"lat":      37.3775,
+							"lon":      -122.03,
+						}},
+					},
+					{
+						User:   "sean",
+						Place:  "briggs",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "ROOFTOP",
+							"lat":      38.9911,
+							"lon":      -121.988,
+						}},
+					},
+					{
+						User:   "sean",
+						Place:  "tonder",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "ROOFTOP",
+							"lat":      37.5441,
+							"lon":      -121.988,
+						}},
+					},
+					{
+						User:   "osi",
+						Place:  "tonder",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "RANGE_INTERPOLATED",
+							"lat":      39.0324,
+							"lon":      -77.4097,
+						}},
+					},
+					{
+						User:   "yemi",
+						Place:  "tonder",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "RANGE_INTERPOLATED",
+							"lat":      39.0324,
+							"lon":      -77.4097,
+						}},
+					},
+
+					{
+						User:   "kemi",
+						Place:  "tonder",
+						Bucket: "people",
+						Geo: GeoLocation{map[string]interface{}{
+							"accuracy": "RANGE_INTERPOLATED",
+							"lat":      38.9911,
+							"lon":      -121.988,
+						}},
+					},
+				}
+				for _, review := range reviews {
+					m := map[string]interface{}{
+						"user":     review.User,
+						"place":    map[string]interface{}{"name": review.Place},
+						"bucket":   review.Bucket,
+						"location": review.Geo.Location,
+					}
+					err := index.IndexDocument(review.Place+review.User, m)
+					if err != nil {
+						panic(err)
+					}
+				}
+				Convey("Geo Distance search", func() {
+					lon, lat := -77.4097, 39.0324
+
+					// res, err := index.Query("tonder")
+					res, err := index.GeoDistanceQuery("+place.name:tonder", lon, lat, "1mi", 20, 0, true, []string{}, OrderRequest([]string{"-_score", "-_id"}))
+					if err != nil {
+						panic(err)
+					}
+					So(res.Hits.Len(), ShouldEqual, 2)
 				})
 			})
 		})

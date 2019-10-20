@@ -23,3 +23,9 @@ type Indexer interface {
 	MatchPhraseQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error)
 	Close()
 }
+
+// GeoCapableIndexer an indexer that can makle geo queries
+type GeoCapableIndexer interface {
+	GeoDistance(lon, lat float64, distance string, opts ...RequestOpt) (*bleve.SearchResult, error)
+	GeoDistanceQuery(q string, lon, lat float64, distance string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error)
+}

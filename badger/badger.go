@@ -3,6 +3,8 @@ package badger
 //TODO: Extract methods into functions
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	// "fmt"
@@ -43,8 +45,9 @@ type BadgerStore struct {
 
 // IndexedData represents a stored row
 type IndexedData struct {
-	Bucket string      `json:"bucket"`
-	Data   interface{} `json:"data"`
+	Bucket  string      `json:"bucket"`
+	GeoData interface{} `json:"location,omitempty"`
+	Data    interface{} `json:"data"`
 }
 
 // Type type o data
@@ -186,6 +189,15 @@ func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 			return nil, err
 		}
 		// }
+	} else if index == "geo-moss" {
+		// var newMoss bool
+		ix, _ = indexer.NewMossIndexer(indexPath)
+		s, err = NewWithIndexer(root, ix)
+		// if !newMoss {
+		if err := indexer.ReIndex(s, ix); err != nil {
+			return nil, err
+		}
+		// }
 	} else {
 		ix = indexer.NewDefaultIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
@@ -194,7 +206,7 @@ func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 }
 
 // NewWithGeoIndex New badger store with geo indexer
-func NewWithGeoIndex(root, index, geoBucket, geoField string) (s *BadgerStore, err error) {
+func NewWithGeoIndex(root, index, geoField, documentName, typefield string) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		os.Mkdir(root, os.FileMode(0755))
 		logger.Debug("created root path " + root)
@@ -211,9 +223,12 @@ func NewWithGeoIndex(root, index, geoBucket, geoField string) (s *BadgerStore, e
 		s, err = NewWithIndexer(root, ix)
 	} else if index == "moss" {
 		// var newMoss bool
+		logger.Debug("new geo enabled indexer")
+		ix, _ = indexer.NewMossIndexerWithGeoMapping(indexPath, geoField, indexer.NewGeoEnabledIndexMapping(geoField, documentName, typefield))
+		s, err = NewWithIndexer(root, ix)
 
-		ix, _ = indexer.NewMossIndexerWithMapping(indexPath, indexer.NewGeoEnabledIndexMapping(root, geoBucket, geoField))
-		s, err = NewWithIndexer(root, &indexer.GeoIndexer{ix})
+		ixj, _ := json.Marshal(ix.Index().Mapping())
+		fmt.Println(string(ixj))
 		// if !newMoss {
 		if err := indexer.ReIndex(s, ix); err != nil {
 			return nil, err
@@ -607,9 +622,86 @@ func (s *BadgerStore) Save(key, store string, src interface{}) (string, error) {
 		if err != nil {
 			return err
 		}
-		return s.Indexer.IndexDocument(key, IndexedData{store, src})
+		return s.Indexer.IndexDocument(key, IndexedData{Bucket: store, Data: src})
 	})
 	return key, err
+}
+
+// SaveWithGeo save
+func (s *BadgerStore) SaveWithGeo(key, store string, src interface{}, field string) (string, error) {
+	if srcMap, ok := src.(map[string]interface{}); ok {
+		skey := s.keyForTableId(store, key)
+		storeKey := []byte(skey)
+		logger.Debug("SaveWithGeo", "key", key, "store", store, "storeKey", skey)
+		err := s.Db.Update(func(txn *badgerdb.Txn) error {
+			if len(field) > 0 {
+				geo, err := valForPath(field, srcMap)
+				if err == nil {
+					srcMap["_location"] = geo
+
+					data, err := json.Marshal(srcMap)
+					if err != nil {
+						return err
+					}
+					err = txn.Set(storeKey, data)
+					if err != nil {
+						return err
+					}
+					return s.Indexer.IndexDocument(key, map[string]interface{}{"bucket": store, "data": srcMap, "location": geo})
+				}
+				return err
+			}
+
+			data, err := json.Marshal(src)
+			if err != nil {
+				return err
+			}
+			err = txn.Set(storeKey, data)
+			if err != nil {
+				return err
+			}
+			return s.Indexer.IndexDocument(key, IndexedData{Bucket: store, Data: src})
+		})
+		return "", err
+	}
+	return key, errors.New("unable to save")
+}
+
+// SaveWithGeoTX save a key within a transaction
+func (s *BadgerStore) SaveWithGeoTX(key, store string, src interface{}, field string, txn gostore.Transaction) error {
+	if srcMap, ok := src.(map[string]interface{}); ok {
+		skey := s.keyForTableId(store, key)
+		storeKey := []byte(skey)
+		logger.Debug("SaveWithGeoTX", "key", key, "store", store, "storeKey", skey)
+		if len(field) > 0 {
+			geo, err := valForPath(field, srcMap)
+			if err == nil {
+				srcMap["_location"] = geo
+				data, err := json.Marshal(srcMap)
+				if err != nil {
+					return err
+				}
+				err = txn.Set(storeKey, data)
+				if err != nil {
+					return err
+				}
+				return s.Indexer.IndexDocument(key, map[string]interface{}{"bucket": store, "data": srcMap, "location": geo})
+			}
+			return err
+
+		}
+
+		data, err := json.Marshal(src)
+		if err != nil {
+			return err
+		}
+		err = txn.Set(storeKey, data)
+		if err != nil {
+			return err
+		}
+		return s.Indexer.IndexDocument(key, IndexedData{Bucket: store, Data: src})
+	}
+	return errors.New("unable to save")
 }
 
 // SaveTX save a key within a transaction
@@ -625,7 +717,7 @@ func (s *BadgerStore) SaveTX(key, store string, src interface{}, txn gostore.Tra
 	if err != nil {
 		return err
 	}
-	err = s.Indexer.IndexDocument(key, IndexedData{store, src})
+	err = s.Indexer.IndexDocument(key, IndexedData{Bucket: store, Data: src})
 	return err
 }
 
@@ -878,6 +970,34 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 	return nil, nil, gostore.ErrNotFound
 }
 
+// GeoQuery query a geocapable indexer
+func (s *BadgerStore) GeoQuery(lon, lat float64, distance string, query map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
+
+	var err error
+	var res *bleve.SearchResult
+	q := "*"
+	if len(query) > 0 {
+		q = indexer.GetQueryString(store, query)
+		// if len(aggregates) == 0 {
+	}
+	logger.Info("GeoQuery", "count", count, "skip", skip, "Store", store, "lat", lat, "lon", lon, "distance", distance, "query", q)
+	if geoIndexer, ok := s.Indexer.(indexer.GeoCapableIndexer); ok {
+		res, err = geoIndexer.GeoDistanceQuery(q, lon, lat, distance, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+	} else {
+		return nil, gostore.ErrNotImplemented
+	}
+	if err != nil {
+		logger.Warn("err", "error", err)
+		return nil, err
+	}
+	if res.Total == 0 {
+		return nil, gostore.ErrNotFound
+	}
+
+	return &SyncIndexRows{name: store, length: res.Total, result: res, bs: s}, err
+}
+
+// FilterDelete filter delete items
 func (s *BadgerStore) FilterDelete(query map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	logger.Info("FilterDelete", "filter", query, "store", store)
 	count := 1000
@@ -952,7 +1072,7 @@ func (s *BadgerStore) BatchUpdate(id []interface{}, data []interface{}, store st
 			if err != nil {
 				return err
 			}
-			indexedData := IndexedData{store, src}
+			indexedData := map[string]interface{}{"bucket": store, "data": src}
 			logger.Debug("BatchInsert", "row", indexedData)
 			b.Index(key, indexedData)
 		}
@@ -1024,7 +1144,7 @@ func (s *BadgerStore) BatchInsert(data []interface{}, store string, opts gostore
 		if err != nil {
 			return nil, err
 		}
-		indexedData := IndexedData{store, src}
+		indexedData := IndexedData{Bucket: store, Data: src}
 		logger.Debug("BatchInsert", "row", indexedData)
 		b.Index(key, indexedData)
 		keys[i] = key
@@ -1062,7 +1182,7 @@ func (s *BadgerStore) BatchInsertTX(data []interface{}, store string, opts gosto
 		if err != nil {
 			return nil, err
 		}
-		indexedData := IndexedData{store, src}
+		indexedData := IndexedData{Bucket: store, Data: src}
 		logger.Debug("BatchInsertTX", "row", indexedData)
 		b.Index(key, indexedData)
 		keys[i] = key
@@ -1095,7 +1215,7 @@ func (s *BadgerStore) BatchInsertKVAndIndex(rows [][][]byte, store string, opts 
 			if err != nil {
 				return err
 			}
-			b.Index(key, IndexedData{store, iData})
+			b.Index(key, IndexedData{Bucket: store, Data: iData})
 			keys[i] = key
 		}
 		logger.Debug("copied", "rows", len(keys))
