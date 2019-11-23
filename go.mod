@@ -20,9 +20,13 @@ require (
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/dustin/gojson v0.0.0-20160307161227-2e71ec9dd5ad
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
+	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/gin-gonic/gin v1.4.0
+	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/gosexy/to v0.0.0-20141221203644-c20e083e3123
 	github.com/gosimple/slug v1.6.0
+	github.com/json-iterator/go v1.1.7 // indirect
+	github.com/mattn/go-isatty v0.0.10 // indirect
 	github.com/mgutz/logxi v0.0.0-20161027140823-aebf8a7d67ab
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/osiloke/gostore v0.0.0-20190824093326-81cde908cde2
@@ -32,6 +36,9 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2 // indirect
 	github.com/stretchr/testify v1.3.0
+	github.com/ugorji/go v1.1.7 // indirect
 	github.com/ungerik/go-dry v0.0.0-20180411133923-654ae31114c8
+	golang.org/x/sys v0.0.0-20191028164358-195ce5e7f934 // indirect
 	google.golang.org/api v0.7.0
+	gopkg.in/yaml.v2 v2.2.4 // indirect
 )

@@ -44,13 +44,18 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, _v)
 		} else if vv, ok := v.(string); ok {
 			valRune := []rune(vv)
-			first := valRune[0]
+			var first rune
+			if len(valRune) > 0 {
+				first = valRune[0]
+			} else {
+				first = 0
+			}
 			if string(first) == "^" { //match ^ regex
 				prefix := "+"
 				queryString = fmt.Sprintf(`%s %sdata.%s:/%v/`, queryString, prefix, k, reduceValueLenght(string(valRune[1:])))
 			} else if first == '\x3C' {
 				if valRune[1] == '\x3A' {
-					// something like <%d2016-12-12
+					// something like <:d2016-12-12
 					queryString = fmt.Sprintf("%s %s", queryString, formatted("<", k, valRune[2:]))
 				} else {
 					// something like <1
@@ -59,7 +64,7 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 				}
 			} else if first == '\x3E' {
 				if valRune[1] == '\x3A' {
-					// something like >%d2016-12-12
+					// something like >:d2016-12-12
 					queryString = fmt.Sprintf("%s %s", queryString, formatted(">", k, valRune[2:]))
 				} else {
 					// something like >20
