@@ -66,25 +66,44 @@ func TestIndexQuery(t *testing.T) {
 		Convey("Add mapping", func() {
 			// index.AddStructMapping("food")
 			Convey("Index document", func() {
-				food := struct {
+				yam := struct {
 					Name        string
 					Description string
 				}{
 					Name:        "yam",
-					Description: "A white vegetable thats actually starchy.",
+					Description: "A white vegetable thats actually starchy called yam. It is also slimy",
+				}
+				potato := struct {
+					Name        string
+					Description string
+				}{
+					Name:        "potato",
+					Description: "A yellow vegetable thats actually starchy called potato.",
 				}
 
-				err := index.IndexDocument(food.Name, food)
+				err := index.IndexDocument(yam.Name, yam)
 				if err != nil {
 					panic(err)
 				}
-				Convey("Query document", func() {
-					res, err := index.Query("white")
+				err = index.IndexDocument(potato.Name, potato)
+				if err != nil {
+					panic(err)
+				}
+				Convey("Querying for yam", func() {
+					res, err := index.Query("yam white slimy vegetable")
 					if err != nil {
 						panic(err)
 					}
-					So(res.Total, ShouldEqual, 1)
+					So(res.Total, ShouldEqual, 2)
 					So(res.Hits[0].ID, ShouldEqual, "yam")
+				})
+				Convey("Querying for potato", func() {
+					res, err := index.Query("yellow starchy vegetable")
+					if err != nil {
+						panic(err)
+					}
+					So(res.Total, ShouldEqual, 2)
+					So(res.Hits[0].ID, ShouldEqual, "potato")
 				})
 			})
 		})
@@ -101,25 +120,36 @@ func TestIndexQueryField(t *testing.T) {
 		Convey("Add mapping", func() {
 			// index.AddStructMapping("food")
 			Convey("Index document", func() {
-				food := struct {
+				yam := struct {
 					Name        string
 					Description string
 				}{
 					Name:        "yam",
-					Description: "A white vegetable thats actually starchy.",
+					Description: "A white vegetable thats actually starchy called yam. It is also slimy",
+				}
+				potato := struct {
+					Name        string
+					Description string
+				}{
+					Name:        "potato",
+					Description: "A yellow vegetable thats actually starchy called potato.",
 				}
 
-				err := index.IndexDocument(food.Name, food)
+				err := index.IndexDocument(yam.Name, yam)
+				if err != nil {
+					panic(err)
+				}
+				err = index.IndexDocument(potato.Name, potato)
 				if err != nil {
 					panic(err)
 				}
 				Convey("Query document", func() {
-					res, err := index.MatchQuery("white", "Description")
+					res, err := index.MatchQuery("A yellow white vegetable", "Description")
 					if err != nil {
 						panic(err)
 					}
-					So(res.Total, ShouldEqual, 1)
-					So(res.Hits[0].ID, ShouldEqual, "yam")
+					So(res.Total, ShouldEqual, 2)
+					So(res.Hits[0].ID, ShouldEqual, "potato")
 				})
 			})
 		})
