@@ -883,9 +883,15 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 		var res *bleve.SearchResult
 		agg := gostore.AggregateResult{}
 		q := indexer.GetQueryString(store, query)
+		var order indexer.RequestOpt
+		if orderBy := opts.GetOrderBy(); len(orderBy) > 0 {
+			order = indexer.OrderRequest((orderBy))
+		} else {
+			order = indexer.OrderRequest([]string{"-_score", "-_id"})
+		}
 		if len(aggregates) == 0 {
-			logger.Info("Query", "count", count, "skip", skip, "Store", store, "query", q)
-			res, err = s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+			logger.Info("Query", "count", count, "skip", skip, "Store", store, "query", q, "order", order)
+			res, err = s.Indexer.QueryWithOptions(q, count, skip, true, []string{}, order)
 
 		} else {
 			facets := indexer.Facets{}
@@ -928,8 +934,8 @@ func (s *BadgerStore) Query(query, aggregates map[string]interface{}, count int,
 					}
 				}
 			}
-			logger.Info("Query", "count", count, "skip", skip, "Store", store, "query", q, "facets", facets)
-			res, err = s.Indexer.FacetedQuery(q, &facets, count, skip, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
+			logger.Info("Query", "count", count, "skip", skip, "Store", store, "query", q, "facets", facets, "orderBy", order)
+			res, err = s.Indexer.FacetedQuery(q, &facets, count, skip, true, []string{}, order)
 
 		}
 		if err != nil {

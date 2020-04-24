@@ -156,6 +156,68 @@ func TestIndexQueryField(t *testing.T) {
 	})
 }
 
+func TestIndexQueryFieldMaxScore(t *testing.T) {
+	indexPath := "./test.index"
+
+	Convey("Create a new index at "+indexPath, t, func() {
+		index := NewDefaultIndexer(indexPath)
+		defer index.Close()
+		defer os.RemoveAll(indexPath)
+		Convey("Add mapping", func() {
+			// index.AddStructMapping("food")
+			Convey("Index document", func() {
+
+				questions := []map[string]interface{}{
+					map[string]interface{}{
+						"ID":       "1",
+						"question": "How are you today",
+						"answer":   "💃💃💃 I'm feeling great?",
+						"action":   "",
+						"type":     "root",
+					}, map[string]interface{}{
+						"ID":       "2",
+						"question": "I want to reset my email password",
+						"answer":   "Lets get that done!",
+						"action":   "",
+						"type":     "root",
+					}, map[string]interface{}{
+						"ID":       "3",
+						"question": "Setup outlook, android, iOS mail client",
+						"answer":   "What is your email address",
+						"action":   "",
+						"type":     "root",
+					}, map[string]interface{}{
+						"ID":       "4",
+						"question": "Type your new password",
+						"action":   "",
+						"next":     "",
+					}, map[string]interface{}{
+						"ID":       "5",
+						"question": "Confirm your new password",
+						"action":   "update_password",
+						"next":     "",
+					},
+				}
+
+				for _, question := range questions {
+					err := index.IndexDocument(question["ID"].(string), question)
+					if err != nil {
+						panic(err)
+					}
+				}
+				Convey("Query document", func() {
+					res, err := index.MatchQuery("How are you", "question")
+					if err != nil {
+						panic(err)
+					}
+					So(res.Total, ShouldEqual, 1)
+					So(res.Hits[0].ID, ShouldEqual, "1")
+				})
+			})
+		})
+	})
+}
+
 func TestIndexMultipleObjects(t *testing.T) {
 	indexPath := "./test.index"
 
