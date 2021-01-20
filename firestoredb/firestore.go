@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 
 	"cloud.google.com/go/firestore"
@@ -14,6 +15,8 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
+
+var logger = common.Logger("firestoredb")
 
 type Firestore struct {
 	ctx     context.Context
@@ -129,7 +132,7 @@ func (k *Firestore) Stats(store string) (map[string]interface{}, error) {
 // All return all rows in a store
 func (k *Firestore) All(count int, skip int, store string) (gostore.ObjectRows, error) {
 	iter := k.fs.Collection(store).Limit(count).Offset(skip).Documents(k.ctx)
-	return &TransactionRows{iter}, nil
+	return &TransactionRows{iter, nil}, nil
 }
 
 // AllCursor returns a cursor for listing all entries in a collection
@@ -230,9 +233,26 @@ func (k *Firestore) FilterGet(filter map[string]interface{}, store string, dst i
 func (k *Firestore) FilterGetAll(filter map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, error) {
 	panic("not implemented")
 }
-func (k *Firestore) Query(filter, aggregates map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, gostore.AggregateResult, error) {
 
-	return nil, nil, gostore.ErrNotFound
+func (k *Firestore) Query(filter, aggregates map[string]interface{}, count int, skip int, store string, opts gostore.ObjectStoreOptions) (gostore.ObjectRows, gostore.AggregateResult, error) {
+	col := k.fs.Collection(store)
+
+	if len(filter) > 0 {
+		q := firestore.Query{}
+		queries := GetQueries(filter)
+		fmt.Println(queries)
+		for _, v := range queries {
+			q = col.Where(v.field, v.op, v.val)
+		}
+		col.Query = q
+	}
+	if opts != nil {
+		if orderBy := opts.GetOrderBy(); len(orderBy) > 0 {
+			col = OrderQuery(orderBy, col)
+		}
+	}
+	iter := col.Limit(count).Offset(skip).Documents(k.ctx)
+	return &TransactionRows{iter, nil}, nil, nil
 }
 func (k *Firestore) FilterDelete(filter map[string]interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	panic("not implemented")

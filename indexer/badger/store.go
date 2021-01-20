@@ -29,7 +29,7 @@ import (
 	"github.com/blevesearch/bleve/index/store"
 	"github.com/blevesearch/bleve/registry"
 	"github.com/dgraph-io/badger"
-	"github.com/mgutz/logxi/v1"
+	log "github.com/mgutz/logxi/v1"
 )
 
 const (
@@ -52,9 +52,7 @@ func New(mo store.MergeOperator, config map[string]interface{}) (store.KVStore, 
 		return nil, os.ErrInvalid
 	}
 
-	opt := badger.DefaultOptions
-	opt.Dir = path
-	opt.ValueDir = path
+	opt := badger.DefaultOptions(path)
 
 	if cdir, ok := config["create_if_missing"].(bool); ok && cdir {
 		if _, err := os.Stat(path); os.IsNotExist(err) {

@@ -8,13 +8,15 @@ import (
 
 // TransactionRows synchroniously get rows
 type TransactionRows struct {
-	iter *firestore.DocumentIterator
+	iter      *firestore.DocumentIterator
+	lastError error
 }
 
 // Next get next item
 func (s *TransactionRows) Next(dst interface{}) (bool, error) {
 	snap, err := s.iter.Next()
 	if err != nil {
+		s.lastError = err
 		return false, err
 	}
 	err = snap.DataTo(&dst)
@@ -25,6 +27,7 @@ func (s *TransactionRows) Next(dst interface{}) (bool, error) {
 func (s *TransactionRows) NextRaw() ([]byte, bool) {
 	snap, err := s.iter.Next()
 	if err != nil {
+		s.lastError = err
 		return nil, false
 	}
 	data := snap.Data()
@@ -37,7 +40,7 @@ func (s *TransactionRows) NextRaw() ([]byte, bool) {
 
 // LastError get last error
 func (s *TransactionRows) LastError() error {
-	return nil
+	return s.lastError
 }
 
 // Count returns count of entries

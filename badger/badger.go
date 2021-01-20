@@ -73,9 +73,7 @@ func (s *BadgerStore) setupTicker() {
 	logger.Debug("setup ticker")
 }
 func NewDBOnly(dbPath string) (s *BadgerStore, err error) {
-	opt := badgerdb.DefaultOptions
-	opt.Dir = dbPath
-	opt.ValueDir = opt.Dir
+	opt := badgerdb.DefaultOptions(dbPath)
 	opt.SyncWrites = true
 	db, err := badgerdb.Open(opt)
 	if err != nil {
@@ -105,9 +103,7 @@ func New(root string) (s *BadgerStore, err error) {
 		logger.Debug("made badger db", "path", dbPath)
 	}
 
-	opt := badgerdb.DefaultOptions
-	opt.Dir = dbPath
-	opt.ValueDir = dbPath
+	opt := badgerdb.DefaultOptions(dbPath)
 	// opt.SyncWrites = true
 	db, err := badgerdb.Open(opt)
 	if err != nil {
@@ -142,9 +138,7 @@ func NewWithIndexer(root string, index indexer.Indexer) (s *BadgerStore, err err
 		logger.Debug("created badger directory " + dbPath)
 	}
 
-	opt := badgerdb.DefaultOptions
-	opt.Dir = dbPath
-	opt.ValueDir = dbPath
+	opt := badgerdb.DefaultOptions(dbPath)
 	opt.SyncWrites = true
 	db, err := badgerdb.Open(opt)
 	if err != nil {
