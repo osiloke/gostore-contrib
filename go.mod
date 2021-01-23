@@ -3,7 +3,8 @@ module github.com/osiloke/gostore-contrib
 go 1.12
 
 require (
-	cloud.google.com/go v0.41.0
+	cloud.google.com/go v0.72.0
+	cloud.google.com/go/firestore v1.4.0
 	firebase.google.com/go v3.8.1+incompatible
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96
 	github.com/Smerity/govarint v0.0.0-20150407073650-7265e41f48f1 // indirect
@@ -30,7 +31,7 @@ require (
 	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/gin-gonic/gin v1.4.0
-	github.com/golang/protobuf v1.4.2
+	github.com/golang/protobuf v1.4.3
 	github.com/gosexy/to v0.0.0-20141221203644-c20e083e3123
 	github.com/gosimple/slug v1.6.0
 	github.com/jinzhu/gorm v1.9.12 // indirect
@@ -55,9 +56,8 @@ require (
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c // indirect
 	github.com/ugorji/go v1.1.7 // indirect
 	github.com/ungerik/go-dry v0.0.0-20180411133923-654ae31114c8
-	golang.org/x/crypto v0.0.0-20200423211502-4bdfaf469ed5 // indirect
-	golang.org/x/net v0.0.0-20200519113804-d87ec0cfa476
-	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
-	google.golang.org/api v0.7.0
+	golang.org/x/net v0.0.0-20201031054903-ff519b6c9102
+	golang.org/x/sys v0.0.0-20201201145000-ef89a241ccb3
+	google.golang.org/api v0.36.0
 	gopkg.in/yaml.v2 v2.2.4 // indirect
 )

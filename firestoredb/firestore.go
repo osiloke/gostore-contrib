@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 
 	"cloud.google.com/go/firestore"
@@ -194,10 +193,15 @@ func (k *Firestore) Save(key, store string, src interface{}) (string, error) {
 	// 	return "", err
 	// }
 	// storeKey := k.keyForTableId(store, key)
-	_, err := k.fs.Collection(store).Doc(key).Set(k.ctx, src)
+	col := k.fs.Collection(store)
+	dc := Counter{3}
+	docRef := col.Doc("DCounter")
+	dc.initCounter(k.ctx, docRef)
+	_, err := col.Doc(key).Set(k.ctx, src)
 	if err != nil {
 		return "", err
 	}
+	dc.incrementCounter(k.ctx, docRef)
 	// k.Indexer.IndexDocument(key, IndexedData{store, src})
 	return key, err
 }
@@ -207,15 +211,33 @@ func (k *Firestore) SaveAll(store string, src ...interface{}) (keys []string, er
 }
 
 func (k *Firestore) Update(key string, store string, src interface{}) error {
-	panic("not implemented")
+	updates := []firestore.Update{}
+	switch up := src.(type) {
+	case map[string]interface{}:
+		for k, v := range up {
+			updates = append(updates, firestore.Update{Path: k, Value: v})
+		}
+	}
+	_, err := k.fs.Collection(store).Doc(key).Update(k.ctx, updates)
+	return err
 }
 
 func (k *Firestore) Replace(key string, store string, src interface{}) error {
-	panic("not implemented")
+	_, err := k.fs.Collection(store).Doc(key).Set(k.ctx, src)
+	return err
 }
 
 func (k *Firestore) Delete(key string, store string) error {
-	panic("not implemented")
+
+	col := k.fs.Collection(store)
+	dc := Counter{3}
+	docRef := col.Doc("DCounter")
+	dc.initCounter(k.ctx, docRef)
+	_, err := col.Doc(key).Delete(k.ctx)
+	if err == nil {
+		dc.decrementCounter(k.ctx, docRef)
+	}
+	return err
 }
 
 func (k *Firestore) FilterUpdate(filter map[string]interface{}, src interface{}, store string, opts gostore.ObjectStoreOptions) error {
@@ -240,7 +262,6 @@ func (k *Firestore) Query(filter, aggregates map[string]interface{}, count int, 
 	if len(filter) > 0 {
 		q := firestore.Query{}
 		queries := GetQueries(filter)
-		fmt.Println(queries)
 		for _, v := range queries {
 			q = col.Where(v.field, v.op, v.val)
 		}
@@ -275,6 +296,10 @@ func (k *Firestore) BatchInsert(data []interface{}, store string, opts gostore.O
 	}
 	keys = make([]string, len(data))
 	batch := k.fs.Batch()
+	col := k.fs.Collection(store)
+	dc := Counter{3}
+	docRef := col.Doc("DCounter")
+	dc.initCounter(k.ctx, docRef)
 
 	for i, src := range data {
 		var key string
@@ -290,11 +315,16 @@ func (k *Firestore) BatchInsert(data []interface{}, store string, opts gostore.O
 		} else {
 			key = gostore.NewObjectId().String()
 		}
-		ref := k.fs.Collection(store).Doc(key)
+		ref := col.Doc(key)
 		batch.Set(ref, src)
 		keys[i] = key
 	}
 	_, err = batch.Commit(k.ctx)
+	if err == nil {
+		for _ = range data {
+			dc.incrementCounter(k.ctx, docRef)
+		}
+	}
 	return keys, err
 
 }
