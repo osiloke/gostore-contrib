@@ -3,6 +3,7 @@ package indexer
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/blevesearch/bleve"
@@ -34,14 +35,17 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 	queryString := "+bucket:" + store
 	for k, v := range filter {
 		if _v, ok := v.(int); ok {
-			queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, _v)
-			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, _v)
+			stringValue := strconv.Itoa(_v)
+			queryString = fmt.Sprintf("%s +data.%s:>=%s", queryString, k, stringValue)
+			queryString = fmt.Sprintf("%s +data.%s:<=%s", queryString, k, stringValue)
 		} else if _v, ok := v.(int64); ok {
-			queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, _v)
-			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, _v)
+			stringValue := strconv.FormatInt(_v, 10)
+			queryString = fmt.Sprintf("%s +data.%s:>=%s", queryString, k, stringValue)
+			queryString = fmt.Sprintf("%s +data.%s:<=%s", queryString, k, stringValue)
 		} else if _v, ok := v.(float64); ok {
-			queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, _v)
-			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, _v)
+			stringValue := strconv.Itoa(int(_v))
+			queryString = fmt.Sprintf("%s +data.%s:>=%v", queryString, k, stringValue)
+			queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, stringValue)
 		} else if vv, ok := v.(string); ok {
 			valRune := []rune(vv)
 			var first rune
