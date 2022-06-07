@@ -18,11 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/gosimple/slug"
 	"github.com/ungerik/go-dry"
 
+	badgerdb "github.com/dgraph-io/badger"
 	"github.com/osiloke/gostore"
 	"github.com/osiloke/gostore-contrib/badger"
 	boltstore "github.com/osiloke/gostore-contrib/bolt"
@@ -60,6 +62,40 @@ var dbCmd = &cobra.Command{
 		defer db.Close()
 
 		switch action {
+		case "keys":
+			if d, ok := db.(*badger.BadgerStore); ok {
+				err = d.Db.View(func(txn *badgerdb.Txn) error {
+					opts := badgerdb.DefaultIteratorOptions
+					opts.PrefetchSize = 10
+					opts.Reverse = true
+					it := txn.NewIterator(opts)
+					defer it.Close()
+					for it.Rewind(); it.Valid(); it.Next() {
+						item := it.Item()
+						k := item.Key()
+						// obj := make([][]byte, 2)
+						// err := item.Value(func(v []byte) error {
+						// 	obj[1] = append([]byte{}, v...)
+						// 	return nil
+						// })
+						// if err != nil {
+						// 	return err
+						// }
+						// objs = append(objs, obj)
+						// obj[0] = make([]byte, len(k))
+						// copy(obj[0], k)
+						key := string(k)
+						fmt.Println(key)
+						// get store count
+						if strings.Contains(key, "schemas") {
+						}
+					}
+					return nil
+				})
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
 		case "getAll":
 			rows, err := db.All(count, 0, store)
 			if err != nil {
