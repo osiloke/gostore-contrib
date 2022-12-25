@@ -123,4 +123,3 @@ require (
 	gopkg.in/yaml.v2 v2.2.4 // indirect
 )
 
-replace github.com/osiloke/gostore => /Users/osiloke/workspace/go/src/github.com/osiloke/gostore
