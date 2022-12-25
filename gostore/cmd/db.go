@@ -120,7 +120,7 @@ var dbCmd = &cobra.Command{
 			if err != nil {
 				panic(err)
 			}
-			ioutil.WriteFile(fmt.Sprintf("dump-%v.json", slug.Make(path+string(time.Now().String()))), []byte(stringRows), 0644)
+			ioutil.WriteFile(fmt.Sprintf("%s-%v.json", store, slug.Make(path+string(time.Now().String()))), []byte(stringRows), 0644)
 		case "get":
 			_data := make(map[string]interface{})
 			if err != nil {
