@@ -11,12 +11,12 @@ require (
 	github.com/dgraph-io/badger v1.6.2
 	github.com/gin-gonic/gin v1.4.0
 	github.com/gosexy/to v0.0.0-20141221203644-c20e083e3123
-	github.com/gosimple/slug v1.6.0
+	github.com/gosimple/slug v1.13.1
 	github.com/mgutz/logxi v0.0.0-20161027140823-aebf8a7d67ab
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/osiloke/gostore v0.0.0-20200424173325-0e8f5ed32e6b
 	github.com/smartystreets/goconvey v1.7.2
-	github.com/spf13/cobra v0.0.5
+	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.4.0
 	github.com/ungerik/go-dry v0.0.0-20180411133923-654ae31114c8
@@ -61,9 +61,10 @@ require (
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20190910122728-9d188e94fb99 // indirect
 	github.com/gorethink/gorethink v4.0.0+incompatible // indirect
+	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/jinzhu/gorm v1.9.12 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
@@ -94,7 +95,7 @@ require (
 	github.com/spf13/afero v1.1.2 // indirect
 	github.com/spf13/cast v1.3.0 // indirect
 	github.com/spf13/jwalterweatherman v1.0.0 // indirect
-	github.com/spf13/pflag v1.0.3 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c // indirect
