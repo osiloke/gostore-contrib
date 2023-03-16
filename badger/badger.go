@@ -4,7 +4,7 @@ package badger
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"io/ioutil"
 	"time"
 
 	// "fmt"
@@ -126,7 +126,7 @@ func New(root string) (s *BadgerStore, err error) {
 	return
 }
 
-//NewWithIndexer New badger store with indexer
+// NewWithIndexer New badger store with indexer
 func NewWithIndexer(root string, index indexer.Indexer) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		os.Mkdir(root, os.FileMode(0755))
@@ -158,43 +158,52 @@ func NewWithIndexer(root string, index indexer.Indexer) (s *BadgerStore, err err
 	return
 }
 
+var indexFilenamePrefix = map[string]string{
+	"badger":   "badger_",
+	"moss":     "",
+	"geo-moss": "",
+}
+
 // NewWithIndex New badger store with indexer
 func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		os.Mkdir(root, os.FileMode(0755))
 		logger.Debug("created root path " + root)
 	}
-	indexPath := filepath.Join(root, "db.index")
+	indexPath := filepath.Join(root, indexFilenamePrefix[index]+"db.index")
 	var ix indexer.Indexer
+	reIndex := false
+	indexInitPath := indexPath + ".init"
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		reIndex = true
+		os.Remove(indexInitPath)
+	} else if _, err := os.Stat(indexInitPath); os.IsNotExist(err) {
+		reIndex = true
+	}
 	if index == "badger" {
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-
 			os.Mkdir(indexPath, os.FileMode(0755))
 			logger.Debug("made badger db index path", "path", indexPath)
 		}
 		ix = indexer.NewBadgerIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
 	} else if index == "moss" {
-		// var newMoss bool
 		ix, _ = indexer.NewMossIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
-		// if !newMoss {
-		if err := indexer.ReIndex(s, ix); err != nil {
-			return nil, err
-		}
-		// }
 	} else if index == "geo-moss" {
-		// var newMoss bool
 		ix, _ = indexer.NewMossIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
-		// if !newMoss {
-		if err := indexer.ReIndex(s, ix); err != nil {
-			return nil, err
-		}
-		// }
 	} else {
 		ix = indexer.NewDefaultIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
+	}
+	if reIndex {
+		ixj, _ := json.Marshal(ix.Index().Mapping())
+		logger.Debug("reindex db", "mapping", string(ixj))
+		if err := indexer.ReIndex(s, ix); err != nil {
+			return nil, err
+		}
+		err = ioutil.WriteFile(indexInitPath, []byte(time.Now().String()), os.ModePerm)
 	}
 	return
 }
@@ -205,32 +214,39 @@ func NewWithGeoIndex(root, index, geoField, documentName, typefield string) (s *
 		os.Mkdir(root, os.FileMode(0755))
 		logger.Debug("created root path " + root)
 	}
-	indexPath := filepath.Join(root, "db.index")
+	indexPath := filepath.Join(root, indexFilenamePrefix[index]+"db.index")
 	var ix indexer.Indexer
+	reIndex := false
+	indexInitPath := indexPath + ".init"
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		reIndex = true
+		os.Remove(indexInitPath)
+	} else if _, err := os.Stat(indexInitPath); os.IsNotExist(err) {
+		reIndex = true
+	}
 	if index == "badger" {
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-
 			os.Mkdir(indexPath, os.FileMode(0755))
 			logger.Debug("made badger db index path", "path", indexPath)
 		}
 		ix = indexer.NewBadgerIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
 	} else if index == "moss" {
-		// var newMoss bool
 		logger.Debug("new geo enabled indexer")
 		ix, _ = indexer.NewMossIndexerWithGeoMapping(indexPath, geoField, indexer.NewGeoEnabledIndexMapping(geoField, documentName, typefield))
 		s, err = NewWithIndexer(root, ix)
-
-		ixj, _ := json.Marshal(ix.Index().Mapping())
-		fmt.Println(string(ixj))
-		// if !newMoss {
-		if err := indexer.ReIndex(s, ix); err != nil {
-			return nil, err
-		}
-		// }
 	} else {
 		ix = indexer.NewDefaultIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
+	}
+
+	if reIndex {
+		ixj, _ := json.Marshal(ix.Index().Mapping())
+		logger.Debug("reindex db", "mapping", string(ixj))
+		if err := indexer.ReIndex(s, ix); err != nil {
+			return nil, err
+		}
+		err = ioutil.WriteFile(indexInitPath, []byte(time.Now().String()), os.ModePerm)
 	}
 	return
 }
@@ -547,7 +563,7 @@ func (s *BadgerStore) Since(id string, count int, skip int, store string) (gosto
 	return &TransactionRows{entries: objs, length: len(objs)}, err
 }
 
-//Before Get all recent items from a key
+// Before Get all recent items from a key
 func (s *BadgerStore) Before(id string, count int, skip int, store string) (gostore.ObjectRows, error) {
 	var objs [][][]byte
 	err := s.Db.View(func(txn *badgerdb.Txn) error {
@@ -783,7 +799,7 @@ func (s *BadgerStore) Delete(key string, store string) error {
 	return s._Delete(key, store)
 }
 
-//Filter
+// Filter
 func (s *BadgerStore) FilterUpdate(filter map[string]interface{}, src interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	return gostore.ErrNotImplemented
 }
@@ -1035,7 +1051,7 @@ func (s *BadgerStore) FilterCount(filter map[string]interface{}, store string, o
 	return 0, gostore.ErrNotFound
 }
 
-//Misc gets
+// Misc gets
 func (s *BadgerStore) GetByField(name, val, store string, dst interface{}) error { return nil }
 func (s *BadgerStore) GetByFieldsByField(name, val, store string, fields []string, dst interface{}) (err error) {
 	return gostore.ErrNotImplemented

@@ -41,6 +41,6 @@ func NewBadgerIndexerWithMapping(indexPath string, indexMapping mapping.IndexMap
 			panic(err)
 		}
 	}
-	logger.Debug("opening existing index", "stats", index.Stats())
+	logger.Debug("opening existing index", "path", indexPath, "stats", index.Stats())
 	return &DefaultIndexer{index: index}
 }

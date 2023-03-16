@@ -53,5 +53,5 @@ func (r *Reader) RangeIterator(start, end []byte) store.KVIterator {
 }
 
 func (r *Reader) Close() error {
-	return nil
+	return r.Commit()
 }
