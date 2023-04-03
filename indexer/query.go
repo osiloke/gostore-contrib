@@ -84,8 +84,11 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 
 				queryString = fmt.Sprintf(`%s %sdata.%s:"%v"`, queryString, prefix, k, reduceValueLenght(string(fmt.Sprintf("%v", v))))
 			}
+		} else if _v, ok := v.(bool); ok {
+			queryString = fmt.Sprintf(`%s +data.%s:"%v"`, queryString, k, _v)
 		} else {
-			logger.Warn(store+" QueryString ["+k+"] was not parsed", "filter", filter, "value", v, "type", reflect.TypeOf(v))
+			logger.Warn(store+" QueryString ["+k+"] was not parsed - defaulting to raw text", "filter", filter, "value", v, "type", reflect.TypeOf(v))
+			queryString = fmt.Sprintf(`%s +data.%s:"%v"`, queryString, k, v)
 		}
 	}
 	return queryString //strings.Replace(queryString, "\"", "", -1)
