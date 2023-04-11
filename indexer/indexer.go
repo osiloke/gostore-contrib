@@ -9,8 +9,9 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/blevesearch/bleve"
-	"github.com/blevesearch/bleve/mapping"
+	"github.com/blevesearch/bleve/v2"
+	"github.com/blevesearch/bleve/v2/mapping"
+	// "github.com/blevesearch/blevex/regexp"
 )
 
 func ReIndex(provider ProviderStore, index Indexer) error {
@@ -76,7 +77,7 @@ func (i *DefaultIndexer) AddDocumentMapping(name string, dm *mapping.DocumentMap
 
 func (i *DefaultIndexer) IndexDocument(id string, data interface{}) error {
 	if i.index == nil {
-		return errors.New("No index")
+		return errors.New("no index")
 	}
 	// logger.Debug("Indexing document", "id", id, "data", data)
 	return i.index.Index(id, data)
@@ -84,7 +85,7 @@ func (i *DefaultIndexer) IndexDocument(id string, data interface{}) error {
 
 func (i *DefaultIndexer) UnIndexDocument(id string) error {
 	if i.index == nil {
-		return errors.New("No index")
+		return errors.New("no index")
 	}
 	// logger.Debug("UnIndexing document", "id", id)
 	return i.index.Delete(id)
@@ -99,7 +100,7 @@ func (i *DefaultIndexer) QueryMap(q map[string]interface{}, opts ...RequestOpt) 
 }
 func (i *DefaultIndexer) Query(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	// println(q)
 	query := bleve.NewQueryStringQuery(q)
@@ -114,7 +115,7 @@ func (i *DefaultIndexer) Query(q string, opts ...RequestOpt) (*bleve.SearchResul
 
 func (i *DefaultIndexer) QueryWithOptions(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	query := bleve.NewQueryStringQuery(q)
 	searchRequest := bleve.NewSearchRequestOptions(query, size, from, explain)
@@ -131,7 +132,7 @@ func (i *DefaultIndexer) QueryWithOptions(q string, size, from int, explain bool
 
 func (i *DefaultIndexer) FacetedQuery(q string, facets *Facets, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	if i.index == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	query := bleve.NewQueryStringQuery(q)
 	searchRequest := bleve.NewSearchRequestOptions(query, size, from, explain)
@@ -149,7 +150,7 @@ func (i *DefaultIndexer) FacetedQuery(q string, facets *Facets, size, from int, 
 func (i *DefaultIndexer) QueryWithOptionsHighlighted(q string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	query := bleve.NewQueryStringQuery(q)
 	searchRequest := bleve.NewSearchRequestOptions(query, size, from, explain)
@@ -165,7 +166,7 @@ func (i *DefaultIndexer) QueryWithOptionsHighlighted(q string, size, from int, e
 func (i *DefaultIndexer) MatchQuery(q, field string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	query := bleve.NewMatchQuery(q)
 	query.SetField(field)
@@ -182,7 +183,7 @@ func (i *DefaultIndexer) MatchQuery(q, field string, opts ...RequestOpt) (*bleve
 func (i *DefaultIndexer) TermQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	query := bleve.NewTermQuery(q)
 	searchRequest := bleve.NewSearchRequest(query)
@@ -197,7 +198,7 @@ func (i *DefaultIndexer) TermQuery(q string, opts ...RequestOpt) (*bleve.SearchR
 func (i *DefaultIndexer) MatchPhraseQuery(q string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 
 	if i.index == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	query := bleve.NewMatchPhraseQuery(q)
 	searchRequest := bleve.NewSearchRequest(query)
@@ -303,13 +304,13 @@ func (g *GeoIndexer) GeoDistance(lon, lat float64, distance string, opts ...Requ
 	return g.Indexer.Index().Search(searchRequest)
 }
 
-//GeoDistanceQuery Geo
+// GeoDistanceQuery Geo
 func (g *GeoIndexer) GeoDistanceQuery(q string, lon, lat float64, distance string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error) {
 	//Search the index with GEO //https://github.com/blevesearch/bleve/issues/836
 	//https://github.com/blevesearch/bleve/issues/599
 	//term query
 	if g.Index() == nil {
-		return nil, errors.New("No index")
+		return nil, errors.New("no index")
 	}
 	query := bleve.NewQueryStringQuery(q)
 	//distance query

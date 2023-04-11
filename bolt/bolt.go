@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/blevesearch/bleve"
+	"github.com/blevesearch/bleve/v2"
 	boltdb "github.com/boltdb/bolt"
 	"github.com/gin-gonic/gin"
 	log "github.com/mgutz/logxi/v1"
@@ -723,7 +723,7 @@ func (s *BoltStore) Delete(key string, store string) error {
 	return err
 }
 
-//Filter
+// Filter
 func (s *BoltStore) FilterUpdate(filter map[string]interface{}, src interface{}, store string, opts gostore.ObjectStoreOptions) error {
 	return gostore.ErrNotImplemented
 }
@@ -842,7 +842,7 @@ func (s *BoltStore) FilterCount(filter map[string]interface{}, store string, opt
 	return 0, gostore.ErrNotFound
 }
 
-//Misc gets
+// Misc gets
 func (s *BoltStore) GetByField(name, val, store string, dst interface{}) error { return nil }
 func (s *BoltStore) GetByFieldsByField(name, val, store string, fields []string, dst interface{}) (err error) {
 	return gostore.ErrNotImplemented

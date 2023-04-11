@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/blevesearch/bleve"
+	"github.com/blevesearch/bleve/v2"
 	"github.com/osiloke/gostore"
 	// "github.com/osiloke/gostore-contrib/indexer"
 )

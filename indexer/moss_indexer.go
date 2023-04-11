@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/blevesearch/bleve"
-	"github.com/blevesearch/bleve/index/store/moss"
-	"github.com/blevesearch/bleve/index/upsidedown"
-	"github.com/blevesearch/bleve/mapping"
+	"github.com/blevesearch/bleve/v2"
+	"github.com/blevesearch/bleve/v2/index/upsidedown/store/moss"
+
+	"github.com/blevesearch/bleve/v2/index/upsidedown"
+	"github.com/blevesearch/bleve/v2/mapping"
 )
 
 // NewMossIndexer creates a new indexer
@@ -49,7 +50,7 @@ func NewMossIndexerWithMapping(indexPath string, indexMapping mapping.IndexMappi
 	return &DefaultIndexer{index: index}, false
 }
 
-//NewMossIndexerWithGeoMapping create a geo capable moss indexer
+// NewMossIndexerWithGeoMapping create a geo capable moss indexer
 func NewMossIndexerWithGeoMapping(indexPath, field string, indexMapping mapping.IndexMapping) (Indexer, bool) {
 	// os.RemoveAll(indexPath)
 	index, err := bleve.Open(indexPath)
