@@ -304,7 +304,7 @@ func (s *BadgerStore) _Get(key, store string) ([][]byte, error) {
 	err := s.Db.View(func(txn *badgerdb.Txn) error {
 		item, err2 := txn.Get(storeKey)
 		if err2 != nil {
-			logger.Info("error getting key", "key", k, "err", err2.Error())
+			logger.Info("error getting key", "store", store, "key", k, "err", err2.Error())
 			return err2
 		}
 		err2 = item.Value(func(v []byte) error {

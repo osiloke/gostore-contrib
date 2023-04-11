@@ -117,11 +117,49 @@ func TestGetQueryString(t *testing.T) {
 			},
 			`+bucket:store +data.day:>"2019-06-11T12:13:43.523888755Z"`,
 		},
+		{
+			"testArrayRegex",
+			args{
+				"store",
+				map[string]interface{}{"name": []string{"^fifty.*", "^.*cent"}},
+			},
+			`+bucket:store +data.name:/fifty.*/ +data.name:/.*cent/`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := GetQueryString(tt.args.store, tt.args.filter); got != tt.want {
 				t.Errorf("GetQueryString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_getQueryValue(t *testing.T) {
+	type args struct {
+		store string
+		k     string
+		v     interface{}
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			"test date less",
+			args{
+				"store",
+				"day",
+				"<:d2019-06-11T12:13:43.523888755Z",
+			},
+			`+data.day:<"2019-06-11T12:13:43.523888755Z"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := getQueryValue(tt.args.store, tt.args.k, tt.args.v); got != tt.want {
+				t.Errorf("getQueryValue() = %v, want %v", got, tt.want)
 			}
 		})
 	}

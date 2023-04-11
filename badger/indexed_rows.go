@@ -15,7 +15,7 @@ type NextItem struct {
 	target interface{}
 }
 
-//New Api
+// New Api
 type IndexedBadgerRows struct {
 	lastError error
 	isClosed  bool
@@ -133,7 +133,7 @@ func (s *SyncIndexRows) Next(dst interface{}) (bool, error) {
 	err := gostore.ErrEOF
 	if int(s.ci) != s.result.Hits.Len() {
 		h := s.result.Hits[s.ci]
-		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
+		logger.Info("next row", "key", h.ID, "store", s.name)
 		row, err := s.bs._Get(h.ID, s.name)
 		if err == nil {
 			err = json.Unmarshal(row[1], dst)
@@ -158,7 +158,7 @@ func (s *SyncIndexRows) NextRaw() ([]byte, bool) {
 	err := gostore.ErrEOF
 	if int(s.ci) != s.result.Hits.Len() {
 		h := s.result.Hits[s.ci]
-		logger.Info(fmt.Sprintf("retrieving %s from %s store in badgerdb", h.ID, s.name))
+		logger.Info("NEXT KEY", "id", h.ID, "store", s.name)
 		row, err := s.bs._Get(h.ID, s.name)
 		if err == nil {
 			s.ci++
