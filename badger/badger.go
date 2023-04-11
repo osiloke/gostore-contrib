@@ -13,7 +13,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/blevesearch/bleve"
+	"github.com/blevesearch/bleve/v2"
+	"github.com/blevesearch/bleve/v2/mapping"
 	badgerdb "github.com/dgraph-io/badger"
 	"github.com/gosexy/to"
 	log "github.com/mgutz/logxi/v1"
@@ -160,12 +161,12 @@ func NewWithIndexer(root string, index indexer.Indexer) (s *BadgerStore, err err
 
 var indexFilenamePrefix = map[string]string{
 	"badger":   "badger_",
-	"moss":     "",
-	"geo-moss": "",
+	"moss":     "moss_",
+	"geo-moss": "geo_moss_",
 }
 
 // NewWithIndex New badger store with indexer
-func NewWithIndex(root, index string) (s *BadgerStore, err error) {
+func NewWithIndex(root, index string, indexMapping mapping.IndexMapping) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		os.Mkdir(root, os.FileMode(0755))
 		logger.Debug("created root path " + root)
@@ -185,16 +186,19 @@ func NewWithIndex(root, index string) (s *BadgerStore, err error) {
 			os.Mkdir(indexPath, os.FileMode(0755))
 			logger.Debug("made badger db index path", "path", indexPath)
 		}
-		ix = indexer.NewBadgerIndexer(indexPath)
+		ix = indexer.NewBadgerIndexerWithMapping(indexPath, indexMapping)
+		s, err = NewWithIndexer(root, ix)
+	} else if index == "memory" {
+		ix, _ = indexer.NewMemIndexerWithMapping(indexPath, indexMapping)
 		s, err = NewWithIndexer(root, ix)
 	} else if index == "moss" {
 		ix, _ = indexer.NewMossIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
 	} else if index == "geo-moss" {
-		ix, _ = indexer.NewMossIndexer(indexPath)
+		ix, _ = indexer.NewMossIndexerWithMapping(indexPath, indexMapping)
 		s, err = NewWithIndexer(root, ix)
 	} else {
-		ix = indexer.NewDefaultIndexer(indexPath)
+		ix = indexer.NewIndexer(indexPath, indexMapping)
 		s, err = NewWithIndexer(root, ix)
 	}
 	if reIndex {
@@ -233,13 +237,18 @@ func NewWithGeoIndex(root, index, geoField, documentName, typefield string) (s *
 		s, err = NewWithIndexer(root, ix)
 	} else if index == "moss" {
 		logger.Debug("new geo enabled indexer")
-		ix, _ = indexer.NewMossIndexerWithGeoMapping(indexPath, geoField, indexer.NewGeoEnabledIndexMapping(geoField, documentName, typefield))
+		mapping := indexer.NewGeoEnabledIndexMapping(geoField, documentName, typefield)
+		ix, _ = indexer.NewMossIndexerWithGeoMapping(indexPath, geoField, mapping)
 		s, err = NewWithIndexer(root, ix)
 	} else {
 		ix = indexer.NewDefaultIndexer(indexPath)
 		s, err = NewWithIndexer(root, ix)
 	}
 
+	dataFieldMapping := bleve.NewDocumentMapping()
+	schemasFieldMapping := bleve.NewKeywordFieldMapping()
+	dataFieldMapping.AddFieldMappingsAt("schemas", schemasFieldMapping)
+	ix.AddDocumentMapping("data", dataFieldMapping)
 	if reIndex {
 		ixj, _ := json.Marshal(ix.Index().Mapping())
 		logger.Debug("reindex db", "mapping", string(ixj))

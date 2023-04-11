@@ -329,8 +329,8 @@ func TestIndexer_FacetedSearch(t *testing.T) {
 						panic(err)
 					}
 
-					So(res.Facets["TopTypes"].Terms[0].Term, ShouldEqual, "carb")
-					So(res.Facets["TopTypes"].Terms[1].Term, ShouldEqual, "protein")
+					So(res.Facets["TopTypes"].Terms.Terms()[0].Term, ShouldEqual, "carb")
+					So(res.Facets["TopTypes"].Terms.Terms()[1].Term, ShouldEqual, "protein")
 				})
 			})
 		})

@@ -3,9 +3,10 @@ package bolt
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/blevesearch/bleve"
-	"github.com/osiloke/gostore"
 	"sync"
+
+	"github.com/blevesearch/bleve/v2"
+	"github.com/osiloke/gostore"
 	// "github.com/osiloke/gostore-contrib/indexer"
 )
 
@@ -14,7 +15,7 @@ type NextItem struct {
 	target interface{}
 }
 
-//New Api
+// New Api
 type IndexedBoltRows struct {
 	lastError error
 	isClosed  bool
@@ -117,13 +118,14 @@ func NewIndexedBoltRows(name string, total uint64, result *bleve.SearchResult, b
 	return b
 }
 
-// func getDatFromFields(fields map[string]interface{}) string {
-// 	jsonObj := gabs.New()
-// 	for k, v := range fields {
-// 		jsonObj.SetP(v, k)
-// 	}
-// 	return jsonObj.S("data").String()
-// }
+//	func getDatFromFields(fields map[string]interface{}) string {
+//		jsonObj := gabs.New()
+//		for k, v := range fields {
+//			jsonObj.SetP(v, k)
+//		}
+//		return jsonObj.S("data").String()
+//	}
+//
 // SyncIndexRows synchroniously get rows
 type SyncIndexRows struct {
 	length    uint64

@@ -7,7 +7,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/blevesearch/bleve/search"
+	"github.com/blevesearch/bleve/v2"
+	"github.com/blevesearch/bleve/v2/analysis/analyzer/custom"
+	"github.com/blevesearch/bleve/v2/analysis/char/regexp"
+	"github.com/blevesearch/bleve/v2/analysis/lang/en"
+	"github.com/blevesearch/bleve/v2/analysis/token/lowercase"
+	rtoken "github.com/blevesearch/bleve/v2/analysis/tokenizer/regexp"
+	"github.com/blevesearch/bleve/v2/search"
 	"github.com/osiloke/gostore"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,20 +27,188 @@ func init() {
 func createDB(name string) *BadgerStore {
 	mode := int(0777)
 	testDbPath := filepath.Join(rootPath, name)
-	indexPath := filepath.Join(testDbPath, "/db.index")
+	indexPath := ""
 	dbPath := filepath.Join(testDbPath, "/db")
 	os.Mkdir(testDbPath, os.FileMode(mode))
 	os.RemoveAll(dbPath)
 	os.RemoveAll(indexPath)
 	// os.Mkdir(dbPath, os.FileMode(mode))
 	// ix, _ := indexer.NewMossIndexer(indexPath)
-	_db, err := NewWithIndex(testDbPath, "")
+
+	indexMapping := bleve.NewIndexMapping()
+	rootMapping := bleve.NewDocumentStaticMapping()
+	rootMapping.Dynamic = true
+	rootMapping.Enabled = true
+	dataFieldMapping := bleve.NewDocumentStaticMapping()
+	dataFieldMapping.Dynamic = true
+	dataFieldMapping.Enabled = true
+	schemasFieldMapping := bleve.NewTextFieldMapping()
+	schemasFieldMapping.Analyzer = "hyphenated"
+
+	dataFieldMapping.AddFieldMappingsAt("schemas", schemasFieldMapping)
+	rootMapping.AddSubDocumentMapping("data", dataFieldMapping)
+	indexMapping.DefaultMapping = rootMapping
+	err := indexMapping.AddCustomTokenizer("hyphenatedTokenization",
+		map[string]interface{}{
+			"type":   rtoken.Name,
+			"regexp": `\w+(?:-\w+)+|\w+`,
+		})
+	if err != nil {
+		panic(err)
+	}
+	err = indexMapping.AddCustomCharFilter("hyphenatedChars",
+		map[string]interface{}{
+			"type":    regexp.Name,
+			"regexp":  `-`,
+			"replace": "",
+		})
+	if err != nil {
+		panic(err)
+	}
+	err = indexMapping.AddCustomAnalyzer("hyphenated",
+		map[string]interface{}{
+			"type":      custom.Name,
+			"tokenizer": "hyphenatedTokenization",
+			"token_filters": []string{
+				en.PossessiveName,
+				lowercase.Name,
+				en.StopName,
+				// "edgeNgram325",
+			},
+			// "char_filters": []string{
+			// 	"hyphenatedChars",
+			// },
+		})
+	if err != nil {
+		panic(err)
+	}
+	_db, err := NewWithIndex(testDbPath, "memory", indexMapping)
 	if err != nil {
 		panic(err)
 	}
 	return _db
 }
 
+func TestBadgerStore_FilterACustomField(t *testing.T) {
+	type args struct {
+		filter map[string]interface{}
+		count  int
+		skip   int
+		store  string
+		opts   gostore.ObjectStoreOptions
+	}
+
+	db := createDB("filterGetAll")
+	defer removeDB("filterGetAll", db)
+	db.CreateTable("data", nil)
+	key := gostore.NewObjectId().String()
+	db.Save(key, "data", map[string]interface{}{
+		"id":      key,
+		"schemas": "message-callback",
+		"count":   10.0,
+	})
+	key2 := gostore.NewObjectId().String()
+	db.Save(key2, "data", map[string]interface{}{
+		"id":      key2,
+		"schemas": "duper-message-callback",
+		"count":   10.0,
+	})
+	key3 := gostore.NewObjectId().String()
+	db.Save(key3, "data", map[string]interface{}{
+		"id":      key3,
+		"schemas": "super-duper-message-callback",
+		"count":   11.0,
+	})
+	key4 := gostore.NewObjectId().String()
+	db.Save(key4, "data", map[string]interface{}{
+		"id":      key4,
+		"schemas": "mega-message-callback",
+		"count":   10.0,
+	})
+	key5 := gostore.NewObjectId().String()
+	db.Save(key5, "data", map[string]interface{}{
+		"id":      key5,
+		"schemas": "mega-super-duper-message-callback",
+		"count":   11.0,
+	})
+	tests := []struct {
+		name string
+		s    *BadgerStore
+		arg  string
+		// want    gostore.ObjectRows
+		wantErr bool
+	}{
+		{
+			"1",
+			db,
+			"message-callback",
+			false,
+		},
+		{
+			"2",
+			db,
+			"duper-message-callback",
+			false,
+		},
+		{
+			"3",
+			db,
+			"super-duper-message-callback",
+			false,
+		},
+		{
+			"3",
+			db,
+			"mega-message-callback",
+			false,
+		},
+		{
+			"4",
+			db,
+			"mega-super-duper-message-callback",
+			false,
+		},
+	}
+	tt := tests[0]
+	got, err := tt.s.FilterGetAll(map[string]interface{}{"q": map[string]interface{}{"schemas": tt.arg}}, 10, 0, "data", nil)
+	if (err != nil) != tt.wantErr {
+		t.Errorf("BadgerStore.FilterGetAll() %s error = %v, wantErr %v", tt.name, err, tt.wantErr)
+		return
+	}
+	for _, tt := range tests[1:] {
+		t.Run(tt.name, func(t *testing.T) {
+
+			var dst map[string]interface{}
+			first := true
+			count := 0
+			for {
+				if first {
+					ok, _ := got.Next(&dst)
+					if ok {
+						count = count + 1
+					} else {
+						break
+					}
+					first = false
+				} else {
+					var fdst map[string]interface{}
+					ok, _ := got.Next(&fdst)
+					if ok {
+						count = count + 1
+					} else {
+						break
+					}
+				}
+			}
+			if count != 1 {
+				assert.Equal(t, tt.arg, dst["schemas"])
+				t.Errorf("BadgerStore.FilterGetAll() %s != %v - %s, wantErr %v - retrieved %v", tt.name, dst["schemas"], tt.arg, tt.wantErr, count)
+				return
+			}
+
+		})
+	}
+}
 func createGeoDB(name, geoField, documentName, typefield string) *BadgerStore {
 	mode := int(0777)
 	testDbPath := filepath.Join(rootPath, name)
@@ -333,6 +507,9 @@ func TestBadgerStore_Query(t *testing.T) {
 		t.Errorf("BadgerStore.Query() error = %v, wantErr %v", err, tt.wantErr)
 		return
 	}
+	tf := search.TermFacets{}
+	tf.Add(&search.TermFacet{"11", 2})
+	tf.Add(&search.TermFacet{"10", 1})
 	logger.Debug("facets", "facets", agg)
 	assert.NotNil(t, rows, "rows were empty")
 	assert.Equal(t, gostore.AggregateResult{
@@ -343,7 +520,7 @@ func TestBadgerStore_Query(t *testing.T) {
 			Missing:     0,
 			NumberRange: search.NumericRangeFacets(nil),
 			DateRange:   search.DateRangeFacets(nil),
-			Top:         search.TermFacets{{"11", 2}, {"10", 1}},
+			Top:         tf,
 		},
 	}, agg, "aggregate data was not retrieved")
 }
