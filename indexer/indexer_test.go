@@ -143,12 +143,36 @@ func TestIndexQueryField(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
-				Convey("Query document", func() {
+				Convey("Query document1", func() {
+					res, err := index.MatchQuery("A  white vegetable", "Description")
+					if err != nil {
+						panic(err)
+					}
+					So(res.Total, ShouldEqual, 2)
+					So(res.Hits[0].ID, ShouldEqual, "yam")
+				})
+				Convey("Query document2", func() {
 					res, err := index.MatchQuery("A yellow white vegetable", "Description")
 					if err != nil {
 						panic(err)
 					}
 					So(res.Total, ShouldEqual, 2)
+					So(res.Hits[0].ID, ShouldEqual, "potato")
+				})
+				Convey("Query document3", func() {
+					res, err := index.MatchQuery("slimy", "Description")
+					if err != nil {
+						panic(err)
+					}
+					So(res.Total, ShouldEqual, 1)
+					So(res.Hits[0].ID, ShouldEqual, "yam")
+				})
+				Convey("Query document4", func() {
+					res, err := index.MatchQuery("potato", "Description")
+					if err != nil {
+						panic(err)
+					}
+					So(res.Total, ShouldEqual, 1)
 					So(res.Hits[0].ID, ShouldEqual, "potato")
 				})
 			})
@@ -163,56 +187,52 @@ func TestIndexQueryFieldMaxScore(t *testing.T) {
 		index := NewDefaultIndexer(indexPath)
 		defer index.Close()
 		defer os.RemoveAll(indexPath)
-		Convey("Add mapping", func() {
-			// index.AddStructMapping("food")
-			Convey("Index document", func() {
+		Convey("Index document", func() {
+			questions := []map[string]interface{}{
+				{
+					"ID":       "1",
+					"question": "How are you",
+					"answer":   "💃💃💃 I'm feeling great?",
+					"action":   "",
+					"type":     "root",
+				}, {
+					"ID":       "2",
+					"question": "I want to reset my email password",
+					"answer":   "Lets get that done!",
+					"action":   "",
+					"type":     "root",
+				}, {
+					"ID":       "3",
+					"question": "Setup outlook, android, iOS mail client",
+					"answer":   "What is your email address",
+					"action":   "",
+					"type":     "root",
+				}, {
+					"ID":       "4",
+					"question": "Type your new password",
+					"action":   "",
+					"next":     "",
+				}, {
+					"ID":       "5",
+					"question": "Confirm your new password",
+					"action":   "update_password",
+					"next":     "",
+				},
+			}
 
-				questions := []map[string]interface{}{
-					map[string]interface{}{
-						"ID":       "1",
-						"question": "How are you today",
-						"answer":   "💃💃💃 I'm feeling great?",
-						"action":   "",
-						"type":     "root",
-					}, map[string]interface{}{
-						"ID":       "2",
-						"question": "I want to reset my email password",
-						"answer":   "Lets get that done!",
-						"action":   "",
-						"type":     "root",
-					}, map[string]interface{}{
-						"ID":       "3",
-						"question": "Setup outlook, android, iOS mail client",
-						"answer":   "What is your email address",
-						"action":   "",
-						"type":     "root",
-					}, map[string]interface{}{
-						"ID":       "4",
-						"question": "Type your new password",
-						"action":   "",
-						"next":     "",
-					}, map[string]interface{}{
-						"ID":       "5",
-						"question": "Confirm your new password",
-						"action":   "update_password",
-						"next":     "",
-					},
+			for _, question := range questions {
+				err := index.IndexDocument(question["ID"].(string), question)
+				if err != nil {
+					panic(err)
 				}
-
-				for _, question := range questions {
-					err := index.IndexDocument(question["ID"].(string), question)
-					if err != nil {
-						panic(err)
-					}
+			}
+			Convey("Query document", func() {
+				res, err := index.MatchQuery("How are you", "question", ExplainRequest(true))
+				if err != nil {
+					panic(err)
 				}
-				Convey("Query document", func() {
-					res, err := index.MatchQuery("How are you", "question")
-					if err != nil {
-						panic(err)
-					}
-					So(res.Total, ShouldEqual, 1)
-					So(res.Hits[0].ID, ShouldEqual, "1")
-				})
+				So(res.Total, ShouldEqual, 1)
+				So(res.Hits[0].ID, ShouldEqual, "1")
 			})
 		})
 	})
@@ -343,14 +363,6 @@ type Ratings struct {
 }
 
 func TestIndexer_FacetedSearchRange(t *testing.T) {
-	type args struct {
-		q          string
-		facets     *Facets
-		size, from int
-		explain    bool
-		fields     []string
-		opts       []RequestOpt
-	}
 	indexPath := "./test.index"
 	os.RemoveAll(indexPath)
 	Convey("Create a new index at "+indexPath, t, func() {
@@ -405,7 +417,7 @@ func TestIndexer_FacetedSearchRange(t *testing.T) {
 				Convey("Faceted query search", func() {
 					res, err := index.FacetedQuery("+place=briggs", &Facets{
 						Range: map[string]RangeFacet{
-							"totalDistanceRating": RangeFacet{
+							"totalDistanceRating": {
 								Field: "ratings.distance",
 								Ranges: []interface{}{
 									map[string]interface{}{"name": "Low", "min": 1, "max": 2},
@@ -428,14 +440,6 @@ func TestIndexer_FacetedSearchRange(t *testing.T) {
 }
 
 func TestIndexer_GeoDistance(t *testing.T) {
-	type args struct {
-		q          string
-		facets     *Facets
-		size, from int
-		explain    bool
-		fields     []string
-		opts       []RequestOpt
-	}
 	indexPath := "./test.index"
 	os.RemoveAll(indexPath)
 	Convey("Create a new index at "+indexPath, t, func() {
@@ -542,14 +546,6 @@ type GeoLocation struct {
 }
 
 func TestIndexer_GeoDistanceQuery(t *testing.T) {
-	type args struct {
-		q          string
-		facets     *Facets
-		size, from int
-		explain    bool
-		fields     []string
-		opts       []RequestOpt
-	}
 	indexPath := "./test.index"
 	// os.RemoveAll(indexPath)
 	Convey("Create a new index at "+indexPath, t, func() {

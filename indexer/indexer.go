@@ -58,6 +58,13 @@ var OrderRequest = func(orderBy []string) RequestOpt {
 	}
 }
 
+var ExplainRequest = func(v bool) RequestOpt {
+	return func(req *bleve.SearchRequest) error {
+		req.Explain = v
+		return nil
+	}
+}
+
 type DefaultIndexer struct {
 	index bleve.Index
 }
@@ -236,6 +243,8 @@ func NewIndexerFromIndex(index bleve.Index) Indexer {
 // NewIndexer creates a new indexer
 func NewDefaultIndexer(indexPath string) Indexer {
 	indexMapping := bleve.NewIndexMapping()
+	indexMapping.StoreDynamic = true
+	indexMapping.IndexDynamic = true
 	return NewIndexer(indexPath, indexMapping)
 }
 
@@ -285,6 +294,10 @@ func NewIndexer(indexPath string, indexMapping mapping.IndexMapping) *DefaultInd
 type GeoIndexer struct {
 	Field string
 	Indexer
+}
+
+func (g *GeoIndexer) SetField(field string) {
+	g.Field = field
 }
 
 // GeoDistance get results within a distance from a lon lat
