@@ -17,7 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -116,11 +116,11 @@ var dbCmd = &cobra.Command{
 				}
 			}
 			rows.Close()
-			stringRows, err := json.MarshalIndent(&jrows, "", "    ")
+			stringRows, err := json.Marshal(&jrows)
 			if err != nil {
 				panic(err)
 			}
-			ioutil.WriteFile(fmt.Sprintf("%s-%v.json", store, slug.Make(path+string(time.Now().String()))), []byte(stringRows), 0644)
+			os.WriteFile(fmt.Sprintf("%s-%v.json", store, slug.Make(path+string(time.Now().String()))), []byte(stringRows), 0644)
 		case "get":
 			_data := make(map[string]interface{})
 			if err != nil {

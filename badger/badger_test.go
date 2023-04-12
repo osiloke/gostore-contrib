@@ -9,12 +9,14 @@ import (
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/custom"
+	"github.com/blevesearch/bleve/v2/analysis/analyzer/keyword"
 	"github.com/blevesearch/bleve/v2/analysis/char/regexp"
 	"github.com/blevesearch/bleve/v2/analysis/lang/en"
 	"github.com/blevesearch/bleve/v2/analysis/token/lowercase"
 	rtoken "github.com/blevesearch/bleve/v2/analysis/tokenizer/regexp"
 	"github.com/blevesearch/bleve/v2/search"
 	"github.com/osiloke/gostore"
+	"github.com/osiloke/gostore-contrib/indexer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,6 +49,8 @@ func createDB(name string) *BadgerStore {
 
 	dataFieldMapping.AddFieldMappingsAt("schemas", schemasFieldMapping)
 	rootMapping.AddSubDocumentMapping("data", dataFieldMapping)
+	indexMapping.StoreDynamic = true
+	indexMapping.IndexDynamic = true
 	indexMapping.DefaultMapping = rootMapping
 	err := indexMapping.AddCustomTokenizer("hyphenatedTokenization",
 		map[string]interface{}{
@@ -60,7 +64,7 @@ func createDB(name string) *BadgerStore {
 		map[string]interface{}{
 			"type":    regexp.Name,
 			"regexp":  `-`,
-			"replace": "",
+			"replace": "_",
 		})
 	if err != nil {
 		panic(err)
@@ -75,9 +79,9 @@ func createDB(name string) *BadgerStore {
 				en.StopName,
 				// "edgeNgram325",
 			},
-			// "char_filters": []string{
-			// 	"hyphenatedChars",
-			// },
+			"char_filters": []string{
+				"hyphenatedChars",
+			},
 		})
 	if err != nil {
 		panic(err)
@@ -90,47 +94,40 @@ func createDB(name string) *BadgerStore {
 }
 
 func TestBadgerStore_FilterACustomField(t *testing.T) {
-	type args struct {
-		filter map[string]interface{}
-		count  int
-		skip   int
-		store  string
-		opts   gostore.ObjectStoreOptions
-	}
 
 	db := createDB("filterGetAll")
 	defer removeDB("filterGetAll", db)
 	db.CreateTable("data", nil)
 	key := gostore.NewObjectId().String()
-	db.Save(key, "data", map[string]interface{}{
+	db.Save(key, "data", map[string]interface{}{"data": map[string]interface{}{
 		"id":      key,
 		"schemas": "message-callback",
 		"count":   10.0,
-	})
+	}})
 	key2 := gostore.NewObjectId().String()
-	db.Save(key2, "data", map[string]interface{}{
+	db.Save(key2, "data", map[string]interface{}{"data": map[string]interface{}{
 		"id":      key2,
 		"schemas": "duper-message-callback",
 		"count":   10.0,
-	})
+	}})
 	key3 := gostore.NewObjectId().String()
-	db.Save(key3, "data", map[string]interface{}{
+	db.Save(key3, "data", map[string]interface{}{"data": map[string]interface{}{
 		"id":      key3,
-		"schemas": "super-duper-message-callback",
-		"count":   11.0,
-	})
-	key4 := gostore.NewObjectId().String()
-	db.Save(key4, "data", map[string]interface{}{
-		"id":      key4,
 		"schemas": "mega-message-callback",
 		"count":   10.0,
-	})
+	}})
+	key4 := gostore.NewObjectId().String()
+	db.Save(key4, "data", map[string]interface{}{"data": map[string]interface{}{
+		"id":      key4,
+		"schemas": "super-duper-message-callback",
+		"count":   11.0,
+	}})
 	key5 := gostore.NewObjectId().String()
-	db.Save(key5, "data", map[string]interface{}{
+	db.Save(key5, "data", map[string]interface{}{"data": map[string]interface{}{
 		"id":      key5,
 		"schemas": "mega-super-duper-message-callback",
 		"count":   11.0,
-	})
+	}})
 	tests := []struct {
 		name string
 		s    *BadgerStore
@@ -153,24 +150,24 @@ func TestBadgerStore_FilterACustomField(t *testing.T) {
 		{
 			"3",
 			db,
-			"super-duper-message-callback",
-			false,
-		},
-		{
-			"3",
-			db,
 			"mega-message-callback",
 			false,
 		},
 		{
 			"4",
 			db,
+			"super-duper-message-callback",
+			false,
+		},
+		{
+			"5",
+			db,
 			"mega-super-duper-message-callback",
 			false,
 		},
 	}
 	tt := tests[0]
-	got, err := tt.s.FilterGetAll(map[string]interface{}{"q": map[string]interface{}{"schemas": tt.arg}}, 10, 0, "data", nil)
+	got, err := tt.s.FilterGetAll(map[string]interface{}{"q": map[string]interface{}{"data.schemas": tt.arg}}, 10, 0, "data", nil)
 	if (err != nil) != tt.wantErr {
 		t.Errorf("BadgerStore.FilterGetAll() %s error = %v, wantErr %v", tt.name, err, tt.wantErr)
 		return
@@ -219,7 +216,30 @@ func createGeoDB(name, geoField, documentName, typefield string) *BadgerStore {
 	os.RemoveAll(indexPath)
 	os.Mkdir(dbPath, os.FileMode(mode))
 	// ix, _ := indexer.NewMossIndexer(indexPath)
-	_db, err := NewWithGeoIndex(testDbPath, "moss", geoField, documentName, typefield)
+	keywordFieldMapping := bleve.NewKeywordFieldMapping()
+	keywordFieldMapping.Analyzer = keyword.Name
+	indexMapping := bleve.NewIndexMapping()
+	rootMapping := bleve.NewDocumentStaticMapping()
+	rootMapping.Dynamic = true
+	rootMapping.Enabled = true
+	dataFieldMapping := bleve.NewDocumentStaticMapping()
+	dataFieldMapping.Dynamic = true
+	dataFieldMapping.Enabled = true
+	schemasFieldMapping := keywordFieldMapping
+	dataFieldMapping.AddFieldMappingsAt("schemas", schemasFieldMapping)
+	rootMapping.AddSubDocumentMapping("data", dataFieldMapping)
+	indexMapping.DefaultMapping = rootMapping
+	locationMapping := bleve.NewGeoPointFieldMapping()
+	locationMapping.IncludeTermVectors = true
+	locationMapping.IncludeInAll = true
+	locationMapping.Index = true
+	locationMapping.Store = true
+	locationMapping.Type = "geopoint"
+	geoMapping := bleve.NewDocumentMapping()
+	geoMapping.AddFieldMappingsAt(geoField, locationMapping)
+	indexMapping.AddDocumentMapping(documentName, geoMapping)
+	indexMapping.TypeField = typefield
+	_db, err := NewWithIndex(testDbPath, "memory", indexMapping, indexer.WithGeoField(geoField))
 	if err != nil {
 		panic(err)
 	}
@@ -489,7 +509,7 @@ func TestBadgerStore_Query(t *testing.T) {
 						"count": map[string]interface{}{
 							"name":  "topCount",
 							"field": "count",
-							"count": 2,
+							"count": 3,
 						},
 					},
 				},
@@ -507,22 +527,23 @@ func TestBadgerStore_Query(t *testing.T) {
 		t.Errorf("BadgerStore.Query() error = %v, wantErr %v", err, tt.wantErr)
 		return
 	}
-	tf := search.TermFacets{}
-	tf.Add(&search.TermFacet{"11", 2})
-	tf.Add(&search.TermFacet{"10", 1})
+	tf := &search.TermFacets{}
+	tf.Add(&search.TermFacet{Term: "11", Count: 2},
+		&search.TermFacet{Term: "10", Count: 1},
+		&search.TermFacet{Term: "12", Count: 1},
+	)
 	logger.Debug("facets", "facets", agg)
 	assert.NotNil(t, rows, "rows were empty")
-	assert.Equal(t, gostore.AggregateResult{
-		"topCount": gostore.Match{
-			Field:       "count",
-			UnMatched:   1,
-			Matched:     4,
-			Missing:     0,
-			NumberRange: search.NumericRangeFacets(nil),
-			DateRange:   search.DateRangeFacets(nil),
-			Top:         tf,
-		},
-	}, agg, "aggregate data was not retrieved")
+	match := gostore.Match{
+		Field:       "count",
+		UnMatched:   0,
+		Matched:     4,
+		Missing:     0,
+		NumberRange: nil,
+		DateRange:   nil,
+		Top:         tf,
+	}
+	assert.Equal(t, match, agg["topCount"])
 }
 
 func TestBadgerStore_GeoQuery(t *testing.T) {

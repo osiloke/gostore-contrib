@@ -26,6 +26,15 @@ type Indexer interface {
 
 // GeoCapableIndexer an indexer that can makle geo queries
 type GeoCapableIndexer interface {
+	SetField(field string)
 	GeoDistance(lon, lat float64, distance string, opts ...RequestOpt) (*bleve.SearchResult, error)
 	GeoDistanceQuery(q string, lon, lat float64, distance string, size, from int, explain bool, fields []string, opts ...RequestOpt) (*bleve.SearchResult, error)
+}
+
+type IndexOptions func(Indexer)
+
+func WithGeoField(field string) IndexOptions {
+	return func(index Indexer) {
+		index.(GeoCapableIndexer).SetField(field)
+	}
 }
