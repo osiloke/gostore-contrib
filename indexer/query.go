@@ -33,6 +33,9 @@ func formatted(fieldPrefix, prefix, field string, valRune []rune) (queryString s
 
 func getQueryValue(store, k string, v interface{}) string {
 	queryString := ""
+	if v == nil {
+		return queryString
+	}
 	if _v, ok := v.(int); ok {
 		stringValue := strconv.Itoa(_v)
 		queryString = fmt.Sprintf("+data.%s:>=%s", k, stringValue)
@@ -46,6 +49,9 @@ func getQueryValue(store, k string, v interface{}) string {
 		queryString = fmt.Sprintf("+data.%s:>=%v", k, stringValue)
 		queryString = fmt.Sprintf("%s +data.%s:<=%v", queryString, k, stringValue)
 	} else if vv, ok := v.(string); ok {
+		if len(vv) == 0 {
+			return queryString
+		}
 		prefix := "+"
 		valRune := []rune(vv)
 		if valRune[0] == '\x21' {
@@ -102,13 +108,19 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 	for k, v := range filter {
 		if _v, ok := v.([]string); ok {
 			for _, vv := range _v {
-				queryString = strings.TrimSpace(fmt.Sprintf("%s %s", queryString, getQueryValue(store, k, vv)))
+				res := getQueryValue(store, k, vv)
+				if len(res) > 0 {
+					queryString = strings.TrimSpace(fmt.Sprintf("%s %s", queryString, res))
+				}
 			}
 		} else {
-			queryString = strings.TrimSpace(fmt.Sprintf("%s %s", queryString, getQueryValue(store, k, v)))
+			res := getQueryValue(store, k, v)
+			if len(res) > 0 {
+				queryString = strings.TrimSpace(fmt.Sprintf("%s %s", queryString, res))
+			}
 		}
 	}
-	return fmt.Sprintf("+bucket:%s %s", store, queryString)
+	return strings.TrimSpace(fmt.Sprintf("+bucket:%s %s", store, queryString))
 }
 
 func floatVal(v interface{}) float64 {
