@@ -105,6 +105,38 @@ func TestGetQueryString(t *testing.T) {
 			"testDateLess",
 			args{
 				"store",
+				map[string]interface{}{"name": "yall", "empty": ""},
+			},
+			`+bucket:store +data.name:"yall"`,
+		},
+		{
+			"testDateLess",
+			args{
+				"store",
+				map[string]interface{}{"empty": ""},
+			},
+			`+bucket:store`,
+		},
+		{
+			"testDateLess",
+			args{
+				"store",
+				map[string]interface{}{"empty": []string{""}},
+			},
+			`+bucket:store`,
+		},
+		{
+			"testDateLess",
+			args{
+				"store",
+				map[string]interface{}{"empty": []string{"", "no"}},
+			},
+			`+bucket:store +data.empty:"no"`,
+		},
+		{
+			"testDateLess",
+			args{
+				"store",
 				map[string]interface{}{"day": "<:d2019-06-11T12:13:43.523888755Z"},
 			},
 			`+bucket:store +data.day:<"2019-06-11T12:13:43.523888755Z"`,
