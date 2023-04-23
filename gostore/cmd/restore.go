@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/blevesearch/bleve/v2"
 	badger "github.com/osiloke/gostore-contrib/badger"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +34,7 @@ var restoreCmd = &cobra.Command{
 		rootPath := fmt.Sprintf("./%s_restored/", filename)
 		os.RemoveAll(rootPath)
 		os.Mkdir(rootPath, os.FileMode(mode))
-		db, err := badger.NewWithIndex(rootPath, "")
+		db, err := badger.NewWithIndex(rootPath, "", bleve.NewIndexMapping())
 		if err != nil {
 			panic(err)
 		}
