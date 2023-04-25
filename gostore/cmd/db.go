@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gosimple/slug"
@@ -86,9 +85,6 @@ var dbCmd = &cobra.Command{
 						// copy(obj[0], k)
 						key := string(k)
 						fmt.Println(key)
-						// get store count
-						if strings.Contains(key, "schemas") {
-						}
 					}
 					return nil
 				})
@@ -113,6 +109,8 @@ var dbCmd = &cobra.Command{
 				json.Unmarshal(b, &d)
 				if err == nil {
 					jrows = append(jrows, d)
+				} else {
+					fmt.Println(err)
 				}
 			}
 			rows.Close()
