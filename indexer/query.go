@@ -113,6 +113,13 @@ func GetQueryString(store string, filter map[string]interface{}) string {
 					queryString = strings.TrimSpace(fmt.Sprintf("%s %s", queryString, res))
 				}
 			}
+		} else if _v, ok := v.([]interface{}); ok {
+			for _, vv := range _v {
+				res := getQueryValue(store, k, vv)
+				if len(res) > 0 {
+					queryString = strings.TrimSpace(fmt.Sprintf("%s %s", queryString, res))
+				}
+			}
 		} else {
 			res := getQueryValue(store, k, v)
 			if len(res) > 0 {
