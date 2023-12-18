@@ -57,18 +57,30 @@ func (d *IndexedData) Type() string {
 	return "indexed_data"
 }
 
+func runValueLogGC(db *badgerdb.DB) {
+	// at most do 10 value log gc each time.
+	for i := 0; i < 10; i++ {
+		err := db.RunValueLogGC(0.5)
+		if err != nil {
+			if err == badgerdb.ErrNoRewrite {
+				// logger.Info("badger has no value log need gc now")
+			} else {
+				logger.Error("badger run value log gc failed", "err", err)
+			}
+			return
+		}
+		// logger.Info("badger run value log gc success")
+	}
+}
+
 func (s *BadgerStore) setupTicker() {
 	done := make(chan bool)
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	s.done = done
 	s.t = ticker
 	go func() {
 		for range ticker.C {
-		again:
-			err := s.Db.RunValueLogGC(0.7)
-			if err == nil {
-				goto again
-			}
+			runValueLogGC(s.Db)
 		}
 		done <- true
 	}()
@@ -128,6 +140,45 @@ func New(root string) (s *BadgerStore, err error) {
 	return
 }
 
+func ListKeys(db *badgerdb.DB, allVersion bool) error {
+	keySize := 0
+	valueSize := 0
+	keyCount := 0
+	err := db.View(func(txn *badgerdb.Txn) error {
+		opts := badgerdb.DefaultIteratorOptions
+		opts.AllVersions = allVersion
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			err := item.Value(func(v []byte) error {
+				valueSize += len(v)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			keySize += len(k)
+			keyCount++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	MB := 1048576.0
+	GB := 1073741824.0
+	logger.Debug("finish get total badger db size",
+		"size(GB)", float64(keySize+valueSize)/GB,
+		"all-version", allVersion,
+		"count", keyCount,
+		"key-size(MB)", float64(keySize)/MB,
+		"value-size(GB)", float64(valueSize)/GB,
+	)
+	return nil
+}
+
 // NewWithIndexer New badger store with indexer
 func NewWithIndexer(root string, index indexer.Indexer) (s *BadgerStore, err error) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
@@ -147,6 +198,8 @@ func NewWithIndexer(root string, index indexer.Indexer) (s *BadgerStore, err err
 		logger.Error("unable to create badgerdb", "err", err.Error(), "opt", opt)
 		return
 	}
+	ListKeys(db, false)
+	ListKeys(db, true)
 	s = &BadgerStore{
 		[]byte("_default"),
 		db,
@@ -885,12 +938,11 @@ func (s *BadgerStore) FilterGetTX(filter map[string]interface{}, store string, d
 		query := indexer.GetQueryString(store, query)
 		res, err := s.Indexer.QueryWithOptions(query, 1, 0, true, []string{}, indexer.OrderRequest([]string{"-_score", "-_id"}))
 		if err != nil {
-			logger.Info("FilterGetTX failed", "query", query)
+			logger.Error("FilterGetTX failed", "query", query)
 			return err
 		}
-		logger.Info("FilterGetTX success", "query", query)
 		if res.Total == 0 {
-			logger.Info("FilterGetTX empty result", "result", res.String())
+			logger.Error("FilterGetTX empty result", "result", res.String())
 			return gostore.ErrNotFound
 		}
 		key := res.Hits[0].ID
