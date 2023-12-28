@@ -14,6 +14,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/osiloke/gostore-contrib/gostore/copy"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +32,7 @@ var cloneCmd = &cobra.Command{
 	Short: "Clone a store",
 	Long:  `Clone a store. This will generate a new db with indexed data in the target folder`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := copy.Clone(batchCount, leftStore, rightStore, leftStorePath, rightStorePath, stores); err != nil {
+		if err := copy.Clone(context.Background(), batchCount, leftStore, rightStore, leftStorePath, rightStorePath, stores); err != nil {
 			println("ERROR " + err.Error())
 			return
 		}
@@ -50,10 +52,10 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// cloneCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	cloneCmd.Flags().StringVarP(&leftStore, "source-store", "s", "bolt", "store which is to be cloneed")
+	cloneCmd.Flags().StringVarP(&leftStore, "source-store", "s", "", "source store")
 	cloneCmd.Flags().StringVarP(&leftStorePath, "source-path", "p", "./srcdb/db", "source path")
-	cloneCmd.Flags().StringVarP(&rightStore, "target-store", "t", "badger", "destination store")
+	cloneCmd.Flags().StringVarP(&rightStore, "target-store", "t", "", "destination store")
 	cloneCmd.Flags().StringVarP(&rightStorePath, "target-path", "a", "./destdb", "target path")
 	cloneCmd.Flags().StringSliceVarP(&stores, "stores", "e", []string{"default"}, "stores to copy")
-	cloneCmd.Flags().IntVarP(&batchCount, "batch", "b", 1000, "how many rows to save at a time")
+	cloneCmd.Flags().IntVarP(&batchCount, "batch", "b", 500, "how many rows to save at a time")
 }

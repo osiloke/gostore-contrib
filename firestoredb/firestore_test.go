@@ -2,7 +2,6 @@ package firestoredb
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -14,7 +13,7 @@ var sa []byte
 func init() {
 	serviceAccountFile, ok := os.LookupEnv("GOOGLE_SERVICE_ACCOUNT")
 	if ok {
-		data, err := ioutil.ReadFile(serviceAccountFile)
+		data, err := os.ReadFile(serviceAccountFile)
 		if err == nil {
 			sa = data
 		}

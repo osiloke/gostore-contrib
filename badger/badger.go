@@ -2,8 +2,10 @@ package badger
 
 //TODO: Extract methods into functions
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -617,7 +619,63 @@ func (s *BadgerStore) Cursor() (common.Iterator, error) {
 }
 
 func (s *BadgerStore) AllCursor(store string) (gostore.ObjectRows, error) {
-	return nil, gostore.ErrNotImplemented
+	rows := common.NewCursorRows()
+	go func(rows *common.CursorRows) {
+		defer func() {
+			rows.Done() <- true
+		}()
+		err := s.Db.View(func(txn *badgerdb.Txn) error {
+			opts := badgerdb.DefaultIteratorOptions
+			opts.PrefetchSize = 10
+			it := txn.NewIterator(opts)
+			defer it.Close()
+
+			prefix := []byte(s.keyForTable(store))
+			it.Seek(prefix)
+		OUTER:
+			for {
+				select {
+				case <-rows.Exit():
+					break OUTER
+				case <-rows.NextChan():
+				NEXTAGAIN:
+					if !it.Valid() || !it.ValidForPrefix(prefix) {
+						fmt.Println("invalid")
+						continue
+					}
+					item := it.Item()
+					k := item.KeyCopy(nil)
+					v, err := item.ValueCopy(nil)
+					if err != nil {
+						return err
+					}
+
+					obj := make([][]byte, 2)
+					obj[0] = make([]byte, len(k))
+					copy(obj[0], k)
+					unsplit := bytes.SplitN(k, []byte("|"), -1)
+					k = unsplit[1]
+					sn := string(bytes.SplitN(unsplit[0], []byte("$"), -1)[1])
+
+					if sn == store {
+						obj[1] = make([]byte, len(v))
+						copy(obj[1], v)
+						rows.OnNext([][]byte{k, v})
+					} else {
+						it.Next()
+						goto NEXTAGAIN
+					}
+					it.Next()
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			logger.Error("cursor rows for "+store+" failed", "err", err.Error())
+		}
+	}(rows)
+	return rows, nil
 }
 
 func (s *BadgerStore) Stream() (*common.CursorRows, error) {

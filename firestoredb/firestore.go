@@ -179,11 +179,11 @@ func (k *Firestore) Get(key string, store string, dst interface{}) error {
 // SaveRaw save raw byte data
 func (k *Firestore) SaveRaw(key string, val []byte, store string) error {
 	data := map[string]interface{}{}
-	json.Unmarshal(val, data)
-	if _, err := k.Save(key, store, data); err != nil {
-		return err
+	err := json.Unmarshal(val, &data)
+	if err == nil {
+		_, err = k.Save(key, store, data)
 	}
-	return nil
+	return err
 }
 
 // Save a key to a collection
@@ -194,14 +194,10 @@ func (k *Firestore) Save(key, store string, src interface{}) (string, error) {
 	// }
 	// storeKey := k.keyForTableId(store, key)
 	col := k.fs.Collection(store)
-	dc := Counter{3}
-	docRef := col.Doc("DCounter")
-	dc.initCounter(k.ctx, docRef)
 	_, err := col.Doc(key).Set(k.ctx, src)
 	if err != nil {
 		return "", err
 	}
-	dc.incrementCounter(k.ctx, docRef)
 	// k.Indexer.IndexDocument(key, IndexedData{store, src})
 	return key, err
 }
@@ -230,13 +226,7 @@ func (k *Firestore) Replace(key string, store string, src interface{}) error {
 func (k *Firestore) Delete(key string, store string) error {
 
 	col := k.fs.Collection(store)
-	dc := Counter{3}
-	docRef := col.Doc("DCounter")
-	dc.initCounter(k.ctx, docRef)
 	_, err := col.Doc(key).Delete(k.ctx)
-	if err == nil {
-		dc.decrementCounter(k.ctx, docRef)
-	}
 	return err
 }
 
@@ -297,9 +287,6 @@ func (k *Firestore) BatchInsert(data []interface{}, store string, opts gostore.O
 	keys = make([]string, len(data))
 	batch := k.fs.Batch()
 	col := k.fs.Collection(store)
-	dc := Counter{3}
-	docRef := col.Doc("DCounter")
-	dc.initCounter(k.ctx, docRef)
 
 	for i, src := range data {
 		var key string
@@ -320,14 +307,42 @@ func (k *Firestore) BatchInsert(data []interface{}, store string, opts gostore.O
 		keys[i] = key
 	}
 	_, err = batch.Commit(k.ctx)
-	if err == nil {
-		for _ = range data {
-			dc.incrementCounter(k.ctx, docRef)
-		}
-	}
 	return keys, err
 
 }
+
+func (k *Firestore) BatchInsertKV(rows [][][]byte, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
+	if len(rows) > 500 {
+		return nil, errors.New("batch limit exceeded")
+	}
+	keys = make([]string, len(rows))
+	batch := k.fs.Batch()
+	col := k.fs.Collection(store)
+
+	for i, row := range rows {
+		key := string(row[0])
+		data := map[string]interface{}{}
+		if err = json.Unmarshal(row[1], &data); err != nil {
+			data["value"] = row[1]
+		} else {
+			data, err = convertArraysToStrings(data, false)
+		}
+
+		if err != nil {
+			return keys, err
+		}
+		ref := col.Doc(key)
+		batch.Set(ref, data)
+		keys[i] = key
+	}
+	_, err = batch.Commit(k.ctx)
+	return keys, err
+}
+
+func (k *Firestore) BatchInsertKVAndIndex(rows [][][]byte, store string, opts gostore.ObjectStoreOptions) (keys []string, err error) {
+	return k.BatchInsertKV(rows, store, opts)
+}
+
 func (k *Firestore) BatchDelete(ids []interface{}, store string, opts gostore.ObjectStoreOptions) (err error) {
 	panic("not implemented")
 }

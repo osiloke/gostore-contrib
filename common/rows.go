@@ -3,11 +3,12 @@ package common
 import (
 	"context"
 	"errors"
-	"github.com/osiloke/gostore"
 	"time"
+
+	"github.com/osiloke/gostore"
 )
 
-var ErrTimeout = errors.New("timeout")
+var ErrTimeout = errors.New("timeout occurred accessing next key")
 
 func NewCursorRows() *CursorRows {
 	return &CursorRows{ci: 0, getChan: make(chan bool, 1), nextChan: make(chan [][]byte), exitChan: make(chan bool, 1), doneChan: make(chan bool, 1)}
