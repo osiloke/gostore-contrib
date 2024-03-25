@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/osiloke/gostore"
@@ -140,7 +141,7 @@ func Clone(ctx context.Context, batchCount int, leftStore, rightStore, leftStore
 		store := stores[i]
 		total, err := CopyStore(ctx, src, dst, batchCount, store)
 		if err != nil {
-			if err == gostore.ErrEOF {
+			if err == gostore.ErrEOF || strings.Contains(err.Error(), "timeout") {
 				continue
 			}
 			return err
